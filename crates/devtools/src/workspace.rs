@@ -3,6 +3,7 @@ use crate::{
     json_workbench::JsonWorkbench,
     text_field::{Edited, TextField},
     theme::Theme,
+    transform_workbench::TransformWorkbench,
 };
 use devtools_core::{Category, Registry, ToolMeta};
 use gpui::{prelude::FluentBuilder, *};
@@ -15,6 +16,7 @@ pub struct Workspace {
     sidebar_collapsed: bool,
     selected: &'static str,
     workbench: Entity<JsonWorkbench>,
+    transform: Entity<TransformWorkbench>,
     search: Entity<TextField>,
     palette_search: Entity<TextField>,
     palette_open: bool,
@@ -40,6 +42,7 @@ impl Workspace {
             sidebar_collapsed: false,
             selected: devtools_core::ids::JSON,
             workbench: cx.new(JsonWorkbench::new),
+            transform: cx.new(TransformWorkbench::new),
             search,
             palette_search,
             palette_open: false,
@@ -48,7 +51,11 @@ impl Workspace {
         }
     }
     pub fn focus_editor(&self, window: &mut Window, cx: &App) {
-        self.workbench.read(cx).focus_input(window, cx);
+        if self.selected == devtools_core::ids::JSON {
+            self.workbench.read(cx).focus_input(window, cx);
+        } else {
+            self.transform.read(cx).focus_input(window, cx);
+        }
     }
     fn palette_tools(&self, cx: &App) -> Vec<ToolMeta> {
         self.registry
@@ -84,7 +91,12 @@ impl Workspace {
         self.selected = id;
         self.palette_open = false;
         self.previous_focus = None;
-        self.focus_editor(window, cx);
+        if id != devtools_core::ids::JSON {
+            self.transform
+                .update(cx, |bench, cx| bench.set_tool(id, window, cx));
+        } else {
+            self.focus_editor(window, cx);
+        }
         cx.notify();
     }
     fn toggle_sidebar(&mut self, _: &ToggleSidebar, window: &mut Window, cx: &mut Context<Self>) {
@@ -471,6 +483,9 @@ impl Render for Workspace {
                     .h_full()
                     .when(self.selected == devtools_core::ids::JSON, |view| {
                         view.child(self.workbench.clone())
+                    })
+                    .when(self.selected != devtools_core::ids::JSON, |view| {
+                        view.child(self.transform.clone())
                     }),
             )
             .when(self.palette_open, |view| view.child(self.palette(cx)))

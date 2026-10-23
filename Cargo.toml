@@ -15,10 +15,19 @@ publish = false
 base64 = "0.22"
 devtools-core = { path = "crates/devtools-core" }
 devtools-tools = { path = "crates/devtools-tools" }
-# macOS-only feature set. Do not enable the crate's default features here:
-# they turn on wayland and x11. See docs/plan.md.
+# First-version shell targets macOS with font-kit only. Do not enable GPUI
+# default features here: they turn on wayland and x11. Windows / Linux x86
+# are the intended next platforms after macOS; see docs/plan.md.
 gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+# M2 pure-function tools — portable crates, no OS-specific APIs.
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+# Pin keeps tools building on rustc 1.85+; newer uuid raises rust-version.
+uuid = { version = "=1.11.0", features = ["v4", "v7"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+percent-encoding = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

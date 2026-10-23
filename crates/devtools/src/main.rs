@@ -6,7 +6,9 @@ mod json_run;
 mod json_workbench;
 mod text_field;
 mod theme;
+mod transform_workbench;
 mod tree_state;
+mod ui;
 mod workspace;
 
 use gpui::{

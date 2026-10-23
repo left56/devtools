@@ -57,6 +57,10 @@ impl TextField {
         self.scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
     }
+    pub fn set_placeholder(&mut self, placeholder: &'static str, cx: &mut Context<Self>) {
+        self.placeholder = placeholder.into();
+        cx.notify();
+    }
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.buffer.select_all();
         self.edit(None, "", false, None, cx);

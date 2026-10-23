@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_is_medium_and_not_offered_until_registered() {
+    fn timestamp_is_medium_and_offered_once_registered() {
         let guess = suggest("1700000000");
         assert_eq!(guess[0].tool_id, ids::TIMESTAMP);
         assert_eq!(guess[0].confidence, Confidence::Medium);
@@ -204,11 +204,20 @@ mod tests {
         assert!(suggest("0000000000").is_empty());
 
         let registry = Registry::new(crate::catalog());
-        assert!(applicable_suggestions(&registry, "1700000000").is_empty());
+        assert_eq!(
+            applicable_suggestions(&registry, "1700000000")[0].tool_id,
+            ids::TIMESTAMP
+        );
         assert_eq!(
             applicable_suggestions(&registry, r#"{"ok":true}"#)[0].tool_id,
             ids::JSON
         );
+        // JWT is still only planned — structure matches, but not in catalog.
+        let token_header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+        let token_payload = URL_SAFE_NO_PAD.encode(r#"{"sub":"1"}"#);
+        let token = format!("{token_header}.{token_payload}.sig");
+        assert_eq!(suggest(&token)[0].tool_id, ids::JWT);
+        assert!(applicable_suggestions(&registry, &token).is_empty());
     }
 
     #[test]

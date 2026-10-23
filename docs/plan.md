@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0 骨架和 M1 JSON 工作台已落盘；M2 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；后续左右分栏、JSON 树和融合标题栏见 [检查器验证记录](json-inspector-validation.md)。
+状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具（P0 + number-base/case）已落盘。M3 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -56,32 +56,51 @@ Devtools 是一个本机桌面工具箱：
 - GPUI 仍是 pre-1.0。0.2.2 没有官方多行文本框。Zed 的编辑器不在 `gpui` crate 里。M1 必须自己做一个够用的文本输入，这是关键路径。
 - macOS 渲染走 Metal，字形需要 `font-kit` feature。`gpui` 的 default features 会打开 `wayland` 和 `x11`。本仓库在 workspace 依赖里关掉 default features，只开 `font-kit`。不要为了「看起来完整」把 default features 打开。
 - Xcode 27 自带的命令行工具里没有 `metal`。`gpui` 0.2.2 的 `build.rs` 会调用它编译 shader，缺少时报 `cannot execute tool 'metal'`。先执行 `xcodebuild -downloadComponent MetalToolchain`。本机装好后 `xcrun metal` 是 Apple metal 32023.921。
+- 长期目标包含 Windows x86 与 Linux x86。在那两套主机上实际编译通过之前，不把 GPUI default features、数据目录路径或标题栏行为写进跨平台验收。工具 crate 保持无 GPUI、无 `unsafe`。
 - `serde_json` 默认用 `BTreeMap`，对象键会被排序。workspace 依赖打开了 `preserve_order`。这是行为的一部分，不是实现细节。
 
 ## 当前状态
 
-M0 与 M1 已实现，包含 JSON 检查器和窗口布局改进。
+M0、M1、M2 已实现。M2 在 Linux x86_64 上以 `devtools-core` + `devtools-tools` 的 `cargo test` / `clippy -D warnings` 为可移植性底线；GPUI 壳仍以 macOS 为第一验收平台。
 
 已实现：
 
 - workspace 三 crate：`devtools`、`devtools-core`、`devtools-tools`。
 - `ToolMeta`、固定分类、注册表、搜索。重复 id 会在构造注册表时 panic；空分类隐藏。
 - JSON `prettify` / `minify`：严格解析、保留键顺序。错误行号从 1 开始，列号为 `serde_json` 的字节列号，空输入列号为 0。
-- 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。启动时聚焦空 JSON 输入框。
-- JSON 格式化、压缩、清空、复制结果。运行不改输入；失败移光标并滚到错误行，不增加撤销。清空同时清输入和运行结果。
-- 原文/结果左右分栏，可拖动中间分隔条；JSON 树/只读文本切换。树保留键顺序，支持展开、选择、聚焦子树、返回根；选中节点显示绝对 JSONPath 和 jq 过滤表达式，可分别复制路径、表达式和节点值。路径生成在 tools crate，树交互状态在壳中，均不引用 GPUI。
-- macOS 透明原生标题栏融合暗色内容，保留三色按钮；侧边栏移除副标题及分类筛选按钮，改用分类文件夹。搜索匹配时自动展开文件夹。顶部箭头或 `cmd-b` 可把整个侧边栏收起为 80 逻辑像素窄栏，保留工具、搜索入口及原有工作台和查询状态；展开后恢复完整侧边栏。
-- 继续编辑后保留上次结果并显示待更新提示，重新运行后重建树；压缩后显示文本，格式化后显示树。
-- 侧边栏搜索与 `cmd-k` 面板都调 `Registry::search`，选中工具后保留工作台输入。面板搜索全部工具，不继承侧边栏查询或文件夹折叠状态。
-- `suggest` 纯函数继续保留；M1 不显示建议条，不自动切工具，不后台读取剪贴板。
+- M2 纯函数工具（全部 `NetworkUse::Offline`，界面接好后 `Availability::Ready`）：
+  - `base64`：标准编解码；URL-safe 为开关，默认标准。
+  - `url-encode`：组件编解码（非整段 URL 解析）。
+  - `html-escape`：实体转义/反转义，含数字字符引用。
+  - `hash`：MD5 / SHA-1 / SHA-256 / SHA-512；弱算法旁标注「不用于密码或完整性安全」。
+  - `uuid`：v4 与可选 v7（`uuid` crate，不自写 RNG）。
+  - `timestamp`：秒/毫秒 ↔ 日期时间；默认本机时区，可改 UTC（`chrono`，无平台日历 API）。
+  - `number-base`：2/8/10/16；非法数字报告字符位置。
+  - `case`：snake / camel / Pascal / kebab / CONSTANT。
+- 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
+- JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
+- **通用变换工作台**（`TransformWorkbench`）：复用同一套编辑器与左右分栏，按工具切换动作与选项（字母表、算法、时区、进制、命名风格等）。切换变换类工具时保留输入、清除上次运行结果。不自动切工具。
+- macOS 透明原生标题栏融合暗色内容；侧边栏分类文件夹；`cmd-b` 收起；`cmd-k` 命令面板。
+- `suggest` 纯函数：JSON / JWT 结构 / 时间戳 / 标准 Base64。猜中也不自动切换；未注册工具不会出现在 `applicable_suggestions` 里。
 - `cmd-w` 和最后一个窗口关闭时退出。
 
 未实现：
 
 - 收藏、最近使用、建议条、单独的「读取剪贴板」按钮。
-- 除 JSON 以外的工具界面。
+- M3 检查器（JWT 解码 UI、正则、cron、URL 拆分、diff）。
 - 打包、签名、菜单栏、全局热键。
 - 语法高亮、自动折行、多光标和 redo。
+- **Windows / Linux 上的 GPUI 壳**（见下方「跨平台意图」）。
+
+跨平台意图（不在本 PR 验收）：
+
+- 产品目标包含 **Windows x86 与 Linux x86**，不是永远只做 macOS。M6 之前仍不声称跨平台可用。
+- 工具逻辑（`devtools-core` / `devtools-tools`）已按可移植 crate 编写，禁止平台 UI/路径 API；本仓库 Linux 盒子上两者 test + clippy 通过。
+- 当前阻碍壳在非 macOS 上落地的主要点：
+  - `gpui` 依赖仍只开 `font-kit`（为 Apple Silicon / Metal 路径）；Linux 需另开 wayland/x11 等 feature 并实测。
+  - macOS 融合标题栏、三色按钮、`titlebar_double_click` 等窗口行为需 `cfg` 隔离。
+  - 本地数据目录（M4）候选路径是 `~/Library/Application Support/...`，Windows/Linux 要另定。
+  - 本 Linux 环境即使用新 stable rustc，GPUI 传递依赖（如 `xattr`/`libc`）仍可能编不过；以 macOS 主机验收壳为准。
 
 验收命令：
 
@@ -91,7 +110,15 @@ cargo clippy -p devtools-core -p devtools-tools -p devtools --all-targets -- -D 
 cargo run -p devtools
 ```
 
-2026-10-23：M1 初次验证 21 个单测通过，JSON 检查器迭代后为 26 个，clippy 已通过，已启动窗口并做部分点击/键盘验收；不能据此声称所有系统输入法已通过。完整场景、方法及剩余人工检查见 [M1 验证记录](m1-validation.md)。依赖下载使用临时命令行 registry 参数，没有向仓库写镜像配置，`Cargo.lock` source 仍为 crates.io。
+在只有工具层的环境（无显示服务器 / 非 macOS）至少跑：
+
+```bash
+cargo test -p devtools-core -p devtools-tools --all-targets
+cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
+```
+
+2026-10-23：M2 在 Linux x86_64（rustc stable）上 `devtools-core` 3 + `devtools-tools` 45 个单测通过，两 crate clippy `-D warnings` 通过。壳需在 macOS 上 `cargo run -p devtools` 点验每个新工具的编码/解码/复制与错误展示。
+
 
 ## 架构
 
@@ -172,14 +199,14 @@ id 一旦发布给注册表就不要改。显示名可以改。
 | 优先级 | id | 分类 | 阶段 | 行为 |
 | --- | --- | --- | --- | --- |
 | 已实现 | `json` | 数据 | M1 工作台，Ready | 严格格式化、压缩、树形检查与路径。保留键顺序 |
-| P0 | `base64` | 编码 | M2 | 标准 Base64 编解码。URL-safe 做成开关，默认标准 |
-| P0 | `url-encode` | 编码 | M2 | URL 组件编解码，不是整段 URL 解析 |
-| P0 | `html-escape` | 编码 | M2 | HTML 实体转义和反转义 |
-| P0 | `hash` | 安全 | M2 | MD5、SHA-1、SHA-256、SHA-512。见决策 8 |
-| P0 | `uuid` | 生成 | M2 | v4。使用 `uuid` crate 的随机数，不自己写 RNG。v7 可以加，不阻塞 |
-| P0 | `timestamp` | 时间 | M2 | 秒和毫秒互转。时区默认本机，可改成 UTC。不猜测用户所在城市 |
-| P1 | `number-base` | 数据 | M2 或 M3 | 2/8/10/16。非法数字要指出字符位置 |
-| P1 | `case` | 文本 | M2 | snake、camel、kebab、常量。不处理自然语言复数 |
+| 已实现 | `base64` | 编码 | M2，Ready | 标准 Base64 编解码。URL-safe 做成开关，默认标准 |
+| 已实现 | `url-encode` | 编码 | M2，Ready | URL 组件编解码，不是整段 URL 解析 |
+| 已实现 | `html-escape` | 编码 | M2，Ready | HTML 实体转义和反转义 |
+| 已实现 | `hash` | 安全 | M2，Ready | MD5、SHA-1、SHA-256、SHA-512。见决策 8 |
+| 已实现 | `uuid` | 生成 | M2，Ready | v4 + v7。使用 `uuid` crate 的随机数，不自己写 RNG |
+| 已实现 | `timestamp` | 时间 | M2，Ready | 秒和毫秒互转。时区默认本机，可改成 UTC。不猜测用户所在城市 |
+| 已实现 | `number-base` | 数据 | M2，Ready | 2/8/10/16。非法数字要指出字符位置 |
+| 已实现 | `case` | 文本 | M2，Ready | snake、camel、Pascal、kebab、CONSTANT。不处理自然语言复数 |
 | P1 | `jwt` | 安全 | M3 | 只解码。验签另说，见决策 7 |
 | P1 | `regex` | 文本 | M3 | Rust `regex` crate 的语法，界面写明不是 PCRE。展示匹配和捕获组 |
 | P1 | `cron` | 时间 | M3 | 5 段 cron。给出之后几次运行时间。时区规则写清楚 |
@@ -234,7 +261,7 @@ M1 不做收藏持久化，不做剪贴板猜测条。
 
 ### M2 纯函数工具
 
-把目录里的 P0 全部接上 M1 的编辑器。P1 里的 `number-base` 和 `case` 如果编辑器已经是通用的，就一起做完。
+已落盘。P0 全部接上通用变换工作台；P1 的 `number-base` 与 `case` 一并完成。
 
 每个工具：
 
@@ -319,4 +346,6 @@ JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块�
 
 ## 建议的下一步
 
-先按 M1 验证记录补真实系统 IME 和长文本压力检查。只有确认编辑器稳定后，再单独安排 M2；本轮没有实现 Base64 或 JWT。
+1. 在 macOS 上点验 M2 每个工具：编码/解码或生成、复制结果、错误文案与（如有）光标定位。
+2. 按 M1 验证记录补真实系统 IME 与长文本压力检查。
+3. 再开 M3（JWT 解码 UI、正则、cron、URL 拆分、diff）。不要在 M3 前宣称 Windows/Linux 壳可用。

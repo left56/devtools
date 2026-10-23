@@ -4,6 +4,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
+    ui::{button, pane, pane_header},
 };
 use devtools_tools::json::{JsonDocument, JsonKind};
 use gpui::{prelude::FluentBuilder, *};
@@ -407,47 +408,6 @@ impl JsonWorkbench {
     }
 }
 
-pub fn button(id: &'static str, label: &'static str) -> Stateful<Div> {
-    let theme = Theme::dark();
-    div()
-        .id(id)
-        .cursor_pointer()
-        .px_2()
-        .py_1()
-        .rounded_md()
-        .text_sm()
-        .whitespace_nowrap()
-        .bg(theme.selected)
-        .hover(move |s| s.bg(theme.border))
-        .child(label)
-}
-
-fn pane() -> Div {
-    let theme = Theme::dark();
-    div()
-        .h_full()
-        .min_w_0()
-        .min_h_0()
-        .flex()
-        .flex_col()
-        .bg(theme.panel)
-        .rounded_lg()
-        .border_1()
-        .border_color(theme.border)
-        .overflow_hidden()
-}
-fn pane_header() -> Div {
-    let theme = Theme::dark();
-    div()
-        .h(px(48.))
-        .flex_shrink_0()
-        .px_3()
-        .flex()
-        .items_center()
-        .gap_2()
-        .border_b_1()
-        .border_color(theme.border)
-}
 
 impl Render for JsonWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
