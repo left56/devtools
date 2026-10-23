@@ -28,6 +28,12 @@ uuid = { version = "=1.11.0", features = ["v4", "v7"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 percent-encoding = "2"
 
+# M3 inspectors — portable, no network.
+regex = "1"
+url = "2"
+similar = "2"
+cron = "0.15"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

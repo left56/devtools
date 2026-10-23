@@ -8,7 +8,7 @@
 
 ## 当前能做什么
 
-M2 纯函数工具已接上通用变换工作台。侧边栏目前注册：
+M2 变换工具 + M3 检查器已接上。侧边栏目前注册：
 
 | 工具 | 作用 |
 | --- | --- |
@@ -21,6 +21,11 @@ M2 纯函数工具已接上通用变换工作台。侧边栏目前注册：
 | Timestamp | 秒或毫秒 ↔ 日期时间；默认本机时区，可改 UTC |
 | Number Base | 2 / 8 / 10 / 16，非法数字指出位置 |
 | Case | snake / camel / Pascal / kebab / CONSTANT |
+| JWT | 只解码：header / payload / 签名分栏；`alg:none` 标不受信任；`exp` 显示时间与是否过期；从不暗示已验签 |
+| Regex | Rust `regex`（不是 PCRE）：匹配、捕获组、可选替换 |
+| Cron | 5 段表达式 → 之后 5 次运行；本机时区或 UTC |
+| URL Parse | 拆分各段与 query；不发请求 |
+| Diff | 行级插入/删除；无外部 diff 进程 |
 
 共用能力：
 
@@ -29,7 +34,7 @@ M2 纯函数工具已接上通用变换工作台。侧边栏目前注册：
 - 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；`cmd-k` 命令面板。
 - 系统剪贴板仅在用户粘贴、剪切或复制时读写，没有后台监听。不根据内容自动切换工具。
 
-`cargo test --workspace`（当前 58 个单测：shell 10 + core 3 + tools 45）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)）。macOS 真机点验仍待补。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
+`cargo test --workspace`（当前 tools 层 66 个单测，含 JWT `alg:none` / 过期 `exp`）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2/M3 壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-m3/`）。macOS 真机点验仍待补。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
 
 ## 环境
 

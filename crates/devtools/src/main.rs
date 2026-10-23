@@ -3,6 +3,7 @@
 mod actions;
 mod buffer;
 mod json_run;
+mod inspector_workbench;
 mod json_workbench;
 mod text_field;
 mod theme;

@@ -1,5 +1,6 @@
 use crate::{
     actions::*,
+    inspector_workbench::InspectorWorkbench,
     json_workbench::JsonWorkbench,
     text_field::{Edited, TextField},
     theme::Theme,
@@ -17,6 +18,7 @@ pub struct Workspace {
     selected: &'static str,
     workbench: Entity<JsonWorkbench>,
     transform: Entity<TransformWorkbench>,
+    inspector: Entity<InspectorWorkbench>,
     search: Entity<TextField>,
     palette_search: Entity<TextField>,
     palette_open: bool,
@@ -43,6 +45,7 @@ impl Workspace {
             selected: devtools_core::ids::JSON,
             workbench: cx.new(JsonWorkbench::new),
             transform: cx.new(TransformWorkbench::new),
+            inspector: cx.new(InspectorWorkbench::new),
             search,
             palette_search,
             palette_open: false,
@@ -53,6 +56,8 @@ impl Workspace {
     pub fn focus_editor(&self, window: &mut Window, cx: &App) {
         if self.selected == devtools_core::ids::JSON {
             self.workbench.read(cx).focus_input(window, cx);
+        } else if devtools_tools::is_inspector_tool(self.selected) {
+            self.inspector.read(cx).focus_input(window, cx);
         } else {
             self.transform.read(cx).focus_input(window, cx);
         }
@@ -91,11 +96,14 @@ impl Workspace {
         self.selected = id;
         self.palette_open = false;
         self.previous_focus = None;
-        if id != devtools_core::ids::JSON {
-            self.transform
+        if id == devtools_core::ids::JSON {
+            self.focus_editor(window, cx);
+        } else if devtools_tools::is_inspector_tool(id) {
+            self.inspector
                 .update(cx, |bench, cx| bench.set_tool(id, window, cx));
         } else {
-            self.focus_editor(window, cx);
+            self.transform
+                .update(cx, |bench, cx| bench.set_tool(id, window, cx));
         }
         cx.notify();
     }
@@ -484,9 +492,14 @@ impl Render for Workspace {
                     .when(self.selected == devtools_core::ids::JSON, |view| {
                         view.child(self.workbench.clone())
                     })
-                    .when(self.selected != devtools_core::ids::JSON, |view| {
-                        view.child(self.transform.clone())
-                    }),
+                    .when(devtools_tools::is_inspector_tool(self.selected), |view| {
+                        view.child(self.inspector.clone())
+                    })
+                    .when(
+                        self.selected != devtools_core::ids::JSON
+                            && !devtools_tools::is_inspector_tool(self.selected),
+                        |view| view.child(self.transform.clone()),
+                    ),
             )
             .when(self.palette_open, |view| view.child(self.palette(cx)))
     }

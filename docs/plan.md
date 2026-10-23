@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具（P0 + number-base/case）已落盘。M3 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)。
+状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具、**M3 检查器**（JWT / Regex / Cron / URL Parse / Diff）已落盘。M4 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-m3/`。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -61,7 +61,7 @@ Devtools 是一个本机桌面工具箱：
 
 ## 当前状态
 
-M0、M1、M2 已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
+M0、M1、M2、M3 已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
 
 已实现：
 
@@ -115,6 +115,8 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 ```
 
 2026-10-23：M2 在 Linux x86_64（rustc stable）上 `devtools-core` 3 + `devtools-tools` 45 个单测通过，两 crate clippy `-D warnings` 通过。壳需在 macOS 上 `cargo run -p devtools` 点验每个新工具的编码/解码/复制与错误展示。
+
+2026-10-23：M3 检查器（jwt / regex / cron / url-parse / diff）在 Linux x86_64 落盘并接 `InspectorWorkbench`。`devtools-tools` 单测扩到含 alg:none 与过期 exp；全工作区 `cargo test --workspace`（66 tools 层）与 clippy `-D warnings` 通过；Xvfb + lavapipe 交互截图见 `/workspace/devtools-linux-verify-m3/`。
 
 
 ## 架构
@@ -204,11 +206,11 @@ id 一旦发布给注册表就不要改。显示名可以改。
 | 已实现 | `timestamp` | 时间 | M2，Ready | 秒和毫秒互转。时区默认本机，可改成 UTC。不猜测用户所在城市 |
 | 已实现 | `number-base` | 数据 | M2，Ready | 2/8/10/16。非法数字要指出字符位置 |
 | 已实现 | `case` | 文本 | M2，Ready | snake、camel、Pascal、kebab、CONSTANT。不处理自然语言复数 |
-| P1 | `jwt` | 安全 | M3 | 只解码。验签另说，见决策 7 |
-| P1 | `regex` | 文本 | M3 | Rust `regex` crate 的语法，界面写明不是 PCRE。展示匹配和捕获组 |
-| P1 | `cron` | 时间 | M3 | 5 段 cron。给出之后几次运行时间。时区规则写清楚 |
-| P1 | `url-parse` | 网络 | M3 | 只拆分，不发请求。所以分类虽叫网络，`NetworkUse` 仍是 Offline |
-| P1 | `diff` | 文本 | M3 | 行级 diff。先做纯文本，不做语法高亮 |
+| 已实现 | `jwt` | 安全 | M3，Ready | 只解码。`alg` 原文；`alg:none` 标不受信任；可解析的 `exp` 显示时间与是否过期。文案强调未验签，见决策 7 |
+| 已实现 | `regex` | 文本 | M3，Ready | Rust `regex` crate 语法（不是 PCRE）。匹配、捕获组、可选替换；编译错误直接展示 |
+| 已实现 | `cron` | 时间 | M3，Ready | 5 段 cron，之后 5 次运行。时区可选本机或 UTC，界面写明 |
+| 已实现 | `url-parse` | 网络 | M3，Ready | 只拆分，不发请求。`NetworkUse::Offline` |
+| 已实现 | `diff` | 文本 | M3，Ready | 行级插入/删除。纯 Rust（`similar`），不调用外部 diff 进程 |
 | P2 | HTTP、DNS、证书解码、CSV、SQL 格式化 | — | M5 之后 | 未分配 id。联网工具用 `NetworkUse::Explicit` |
 
 P2 没有 id，就是为了避免半成品出现在注册表里。
@@ -270,16 +272,17 @@ UUID 的测试不断言具体随机值，只断言版本位和可解析。
 
 验收：侧边栏能打开每个 P0 工具，完成一次操作并复制。`cargo test -p devtools-tools` 不需要显示服务器。
 
-### M3 检查器
+### M3 检查器（已完成）
 
-JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块替换文本。
+JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不是整块替换文本）。
 
 - JWT：header / payload / 签名分栏。`alg` 用原文显示。`none` 用明确的警告样式。能解析的 `exp` 显示时间和是否已过期，文案是「未验签」。
 - 正则：模式、被测文本、替换可选。错误来自 `regex` 的编译错误。界面标明 Rust regex 语法。
 - cron：下 5 次运行。写明用的是本机时区还是 UTC。
+- URL Parse：只拆分，不发请求。
 - diff：两块输入，行级插入和删除。不调用外部 `diff` 进程。
 
-验收：每个工具有不启动窗口的测试。JWT 测试里包含 `alg: none` 和一个过期 `exp`，断言结果里没有任何成功或可信字段。
+验收：每个工具有不启动窗口的测试（含 JWT `alg: none` 与过期 `exp`）。Linux x86_64 上 `cargo test --workspace` + clippy `-D warnings` + Xvfb/lavapipe 交互点验通过。
 
 ### M4 效率
 
@@ -343,6 +346,6 @@ JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块�
 
 ## 建议的下一步
 
-1. 在 macOS 真机上复验 M2（标题栏融合、触控板/IME、鼠标点按钮）。
+1. 在 macOS 真机上复验 M2 + M3（标题栏融合、触控板/IME、鼠标点按钮、检查器多栏布局）。
 2. 按 M1 验证记录补长文本压力检查；Linux 上变换工具顶栏按钮的鼠标命中可再查。
-3. 再开 M3（JWT 解码 UI、正则、cron、URL 拆分、diff）。Windows 壳不要抢在 M3 前宣称可用。
+3. 开 M4（剪贴板读取、建议条、最近使用/收藏）。Windows 壳不要抢在 macOS 真机复验前宣称可用。

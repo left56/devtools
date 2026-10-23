@@ -212,12 +212,15 @@ mod tests {
             applicable_suggestions(&registry, r#"{"ok":true}"#)[0].tool_id,
             ids::JSON
         );
-        // JWT is still only planned — structure matches, but not in catalog.
+        // JWT is registered in M3 — suggestions may offer it.
         let token_header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let token_payload = URL_SAFE_NO_PAD.encode(r#"{"sub":"1"}"#);
         let token = format!("{token_header}.{token_payload}.sig");
         assert_eq!(suggest(&token)[0].tool_id, ids::JWT);
-        assert!(applicable_suggestions(&registry, &token).is_empty());
+        assert_eq!(
+            applicable_suggestions(&registry, &token)[0].tool_id,
+            ids::JWT
+        );
     }
 
     #[test]

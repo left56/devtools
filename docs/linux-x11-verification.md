@@ -50,3 +50,18 @@ cargo run -p devtools
 - 普通装饰标题栏（无透明融合 / 无 traffic lights）
 - 快捷键提示写 Ctrl，并同时绑定 Cmd 别名
 - 未开 `wayland`；未做签名 / `.app` 包
+
+
+## M3 检查器点验（同日）
+
+截图在 `/workspace/devtools-linux-verify-m3/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| JWT `alg:none` + 过期 `exp` → 未验签警告、`alg` 原文、`exp` 时间+已过期，header/payload/签名三栏 | 通过（`final-jwt-alg-none-expired.png`） |
+| Regex 匹配/捕获组（标明 Rust regex，不是 PCRE）；可选替换 | 通过（`final-regex.png`） |
+| Cron 5 段 → 之后 5 次；「本机时区」与「UTC」标注可切换 | 通过（`final-cron-local.png` / `final-cron-utc.png`） |
+| URL Parse 拆分各段与 query（无网络） | 通过（`final-url-parse.png`） |
+| Diff 行级插入/删除高亮（无外部进程） | 通过（`final-diff.png`） |
+
+导航以 **Ctrl+K 命令面板** + **Ctrl+Enter 运行** 为主（与 M2 相同）；Regex/Diff 多输入框辅以鼠标点击切换字段。侧边栏「安全 / 网络」分类需下滚才看到 JWT、Hash、URL Parse。
