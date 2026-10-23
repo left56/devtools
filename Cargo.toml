@@ -15,10 +15,9 @@ publish = false
 base64 = "0.22"
 devtools-core = { path = "crates/devtools-core" }
 devtools-tools = { path = "crates/devtools-tools" }
-# First-version shell targets macOS with font-kit only. Do not enable GPUI
-# default features here: they turn on wayland and x11. Windows / Linux x86
-# are the intended next platforms after macOS; see docs/plan.md.
-gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
+# Features are selected per target in crates/devtools/Cargo.toml.
+# Do not turn on GPUI default features at the workspace level.
+gpui = { version = "=0.2.2", default-features = false }
 serde_json = { version = "1", features = ["preserve_order"] }
 # M2 pure-function tools — portable crates, no OS-specific APIs.
 md-5 = "0.10"
@@ -34,3 +33,10 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+
+# gpui → zed-async-tar → xattr 0.2: libc 0.2.191 dropped Linux ENOATTR.
+# Local patch maps it to ENODATA (same errno). Remove when upstream xattr
+# 0.2.x is fixed or gpui moves off xattr 0.2.
+[patch.crates-io]
+xattr = { path = "patches/xattr-0.2.3" }

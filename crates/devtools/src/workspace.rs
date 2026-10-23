@@ -169,8 +169,8 @@ impl Workspace {
             .bg(theme.sidebar)
             .border_r_1()
             .border_color(theme.border)
-            // Native traffic lights occupy the first 48 px even when collapsed.
-            .child(div().h(px(48.)).flex_shrink_0())
+            // macOS traffic lights need the first 48 px; Linux uses a normal titlebar.
+            .child(div().h(px(titlebar_pad())).flex_shrink_0())
             .child(
                 div()
                     .p_2()
@@ -213,7 +213,7 @@ impl Workspace {
                                 this.open_palette(&TogglePalette, window, cx)
                             })),
                     )
-                    .child(div().text_xs().text_color(theme.muted).child("⌘K")),
+                    .child(div().text_xs().text_color(theme.muted).child(palette_hint_short())),
             )
     }
     fn sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -304,9 +304,9 @@ impl Workspace {
             .child(
                 div()
                     .id("sidebar-titlebar")
-                    .h(px(48.))
+                    .h(px(titlebar_pad()))
                     .flex_shrink_0()
-                    .pl(px(86.))
+                    .pl(px(sidebar_title_pl()))
                     .pr_2()
                     .gap_1()
                     .flex()
@@ -359,7 +359,7 @@ impl Workspace {
                     .p_3()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("⌘K 搜索全部工具"),
+                    .child(palette_hint()),
             )
             .into_any_element()
     }
@@ -489,5 +489,49 @@ impl Render for Workspace {
                     }),
             )
             .when(self.palette_open, |view| view.child(self.palette(cx)))
+    }
+}
+
+fn titlebar_pad() -> f32 {
+    #[cfg(target_os = "macos")]
+    {
+        48.
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        12.
+    }
+}
+
+fn sidebar_title_pl() -> f32 {
+    #[cfg(target_os = "macos")]
+    {
+        86.
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        12.
+    }
+}
+
+fn palette_hint() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "⌘K 搜索全部工具"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "Ctrl+K 搜索全部工具"
+    }
+}
+
+fn palette_hint_short() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "⌘K"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "Ctrl+K"
     }
 }

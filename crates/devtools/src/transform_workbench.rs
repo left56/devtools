@@ -5,6 +5,7 @@
 //! Linux / Windows.
 
 use crate::{
+    actions::PrimaryRun,
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{button, chip, pane, pane_header},
@@ -121,6 +122,7 @@ impl TransformWorkbench {
                 self.error_offset = None;
                 self.output
                     .update(cx, |field, cx| field.set_output(&output, cx));
+                self.notice = "已更新结果";
             }
             Err((message, offset)) => {
                 self.output_text = None;
@@ -136,7 +138,6 @@ impl TransformWorkbench {
                 }
             }
         }
-        self.notice = "";
         cx.notify();
     }
 
@@ -298,45 +299,126 @@ impl TransformWorkbench {
         row
     }
 
-    fn action_buttons(&self, cx: &mut Context<Self>) -> Div {
-        let mut row = div().flex().items_center().gap_2();
+    fn run_primary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let action = match self.tool_id {
+            ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => TransformAction::Encode,
+            ids::HASH => TransformAction::Hash,
+            ids::UUID => TransformAction::Generate,
+            ids::TIMESTAMP => TransformAction::FromUnix,
+            ids::NUMBER_BASE | ids::CASE => TransformAction::Convert,
+            _ => return,
+        };
+        self.execute(action, window, cx);
+    }
+
+    fn input_header(&self, cx: &mut Context<Self>) -> Div {
+        // Buttons are direct children of pane_header (same as JSON workbench).
+        let mut header = pane_header().child(div().text_sm().flex_1().child("原文"));
         match self.tool_id {
             ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => {
-                row = row
-                    .child(button("encode", "编码").on_click(cx.listener(|this, _, window, cx| {
-                        this.execute(TransformAction::Encode, window, cx)
-                    })))
-                    .child(button("decode", "解码").on_click(cx.listener(|this, _, window, cx| {
-                        this.execute(TransformAction::Decode, window, cx)
-                    })));
+                header = header
+                    .child(
+                        button("encode", "编码")
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.execute(TransformAction::Encode, window, cx);
+                                }),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.execute(TransformAction::Encode, window, cx)
+                            })),
+                    )
+                    .child(
+                        button("decode", "解码").on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.execute(TransformAction::Decode, window, cx);
+                            }),
+                        ).on_click(cx.listener(|this, _, window, cx| {
+                            this.execute(TransformAction::Decode, window, cx)
+                        })),
+                    );
             }
             ids::HASH => {
-                row = row.child(button("hash", "计算").on_click(cx.listener(
-                    |this, _, window, cx| this.execute(TransformAction::Hash, window, cx),
-                )));
+                header = header.child(
+                    button("hash", "计算")
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.execute(TransformAction::Hash, window, cx);
+                            }),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.execute(TransformAction::Hash, window, cx)
+                        })),
+                );
             }
             ids::UUID => {
-                row = row.child(button("generate", "生成").on_click(cx.listener(
-                    |this, _, window, cx| this.execute(TransformAction::Generate, window, cx),
-                )));
+                header = header.child(
+                    button("generate", "生成")
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.execute(TransformAction::Generate, window, cx);
+                            }),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.execute(TransformAction::Generate, window, cx)
+                        })),
+                );
             }
             ids::TIMESTAMP => {
-                row = row
-                    .child(button("from-unix", "时间戳 → 时间").on_click(cx.listener(
-                        |this, _, window, cx| this.execute(TransformAction::FromUnix, window, cx),
-                    )))
-                    .child(button("to-unix", "时间 → 时间戳").on_click(cx.listener(
-                        |this, _, window, cx| this.execute(TransformAction::ToUnix, window, cx),
-                    )));
+                header = header
+                    .child(
+                        button("from-unix", "时间戳 → 时间")
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.execute(TransformAction::FromUnix, window, cx);
+                                }),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.execute(TransformAction::FromUnix, window, cx)
+                            })),
+                    )
+                    .child(
+                        button("to-unix", "时间 → 时间戳")
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.execute(TransformAction::ToUnix, window, cx);
+                                }),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.execute(TransformAction::ToUnix, window, cx)
+                            })),
+                    );
             }
             ids::NUMBER_BASE | ids::CASE => {
-                row = row.child(button("convert", "转换").on_click(cx.listener(
-                    |this, _, window, cx| this.execute(TransformAction::Convert, window, cx),
-                )));
+                header = header.child(
+                    button("convert", "转换")
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.execute(TransformAction::Convert, window, cx);
+                            }),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.execute(TransformAction::Convert, window, cx)
+                        })),
+                );
             }
             _ => {}
         }
-        row.child(button("clear", "清空").on_click(
+        header.child(button("clear", "清空").on_click(
             cx.listener(|this, _, window, cx| this.clear(window, cx)),
         ))
     }
@@ -425,6 +507,9 @@ impl Render for TransformWorkbench {
         let entity = cx.entity().downgrade();
         div()
             .id("transform-workbench")
+            .on_action(cx.listener(|this, _: &PrimaryRun, window, cx| {
+                this.run_primary(window, cx)
+            }))
             .size_full()
             .min_w_0()
             .min_h_0()
@@ -511,11 +596,7 @@ impl Render for TransformWorkbench {
                         pane()
                             .w(relative(self.split))
                             .flex_shrink_0()
-                            .child(
-                                pane_header()
-                                    .child(div().text_sm().flex_1().child("原文"))
-                                    .child(self.action_buttons(cx)),
-                            )
+                            .child(self.input_header(cx))
                             .child(
                                 div()
                                     .flex_1()

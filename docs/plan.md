@@ -61,7 +61,7 @@ Devtools 是一个本机桌面工具箱：
 
 ## 当前状态
 
-M0、M1、M2 已实现。M2 在 Linux x86_64 上以 `devtools-core` + `devtools-tools` 的 `cargo test` / `clippy -D warnings` 为可移植性底线；GPUI 壳仍以 macOS 为第一验收平台。
+M0、M1、M2 已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
 
 已实现：
 
@@ -90,17 +90,14 @@ M0、M1、M2 已实现。M2 在 Linux x86_64 上以 `devtools-core` + `devtools-
 - M3 检查器（JWT 解码 UI、正则、cron、URL 拆分、diff）。
 - 打包、签名、菜单栏、全局热键。
 - 语法高亮、自动折行、多光标和 redo。
-- **Windows / Linux 上的 GPUI 壳**（见下方「跨平台意图」）。
+- macOS 真机点验与签名分发；Linux Wayland；Windows 壳（见下方「跨平台意图」）。
 
-跨平台意图（不在本 PR 验收）：
+跨平台意图：
 
-- 产品目标包含 **Windows x86 与 Linux x86**，不是永远只做 macOS。M6 之前仍不声称跨平台可用。
-- 工具逻辑（`devtools-core` / `devtools-tools`）已按可移植 crate 编写，禁止平台 UI/路径 API；本仓库 Linux 盒子上两者 test + clippy 通过。
-- 当前阻碍壳在非 macOS 上落地的主要点：
-  - `gpui` 依赖仍只开 `font-kit`（为 Apple Silicon / Metal 路径）；Linux 需另开 wayland/x11 等 feature 并实测。
-  - macOS 融合标题栏、三色按钮、`titlebar_double_click` 等窗口行为需 `cfg` 隔离。
-  - 本地数据目录（M4）候选路径是 `~/Library/Application Support/...`，Windows/Linux 要另定。
-  - 本 Linux 环境即使用新 stable rustc，GPUI 传递依赖（如 `xattr`/`libc`）仍可能编不过；以 macOS 主机验收壳为准。
+- **Linux x86_64 + X11**：已可构建并窗口验收（见 [linux-x11-verification.md](linux-x11-verification.md)）。`gpui` feature 为 `x11`；无独显用 lavapipe。
+- **macOS**：下一轮适配。透明标题栏 / traffic lights 已 `cfg(target_os = "macos")`。仍需 Metal Toolchain 与真机点验。
+- **Windows x86**：更后。`windows-manifest` 仅占位。
+- 工具逻辑保持可移植。`xattr` 0.2 与新 `libc` 的 ENOATTR 问题用 `patches/xattr-0.2.3` 解决。
 
 验收命令：
 
@@ -346,6 +343,6 @@ JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块�
 
 ## 建议的下一步
 
-1. 在 macOS 上点验 M2 每个工具：编码/解码或生成、复制结果、错误文案与（如有）光标定位。
-2. 按 M1 验证记录补真实系统 IME 与长文本压力检查。
-3. 再开 M3（JWT 解码 UI、正则、cron、URL 拆分、diff）。不要在 M3 前宣称 Windows/Linux 壳可用。
+1. 在 macOS 真机上复验 M2（标题栏融合、触控板/IME、鼠标点按钮）。
+2. 按 M1 验证记录补长文本压力检查；Linux 上变换工具顶栏按钮的鼠标命中可再查。
+3. 再开 M3（JWT 解码 UI、正则、cron、URL 拆分、diff）。Windows 壳不要抢在 M3 前宣称可用。
