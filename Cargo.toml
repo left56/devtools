@@ -18,6 +18,7 @@ devtools-tools = { path = "crates/devtools-tools" }
 # Features are selected per target in crates/devtools/Cargo.toml.
 # Do not turn on GPUI default features at the workspace level.
 gpui = { version = "=0.2.2", default-features = false }
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 # M2 pure-function tools — portable crates, no OS-specific APIs.
 md-5 = "0.10"
@@ -33,6 +34,10 @@ regex = "1"
 url = "2"
 similar = "2"
 cron = "0.15"
+
+# M5 Explicit network — blocking; no background / no auto-request on open.
+ureq = { version = "2", default-features = false, features = ["tls"] }
+dns-lookup = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -19,6 +19,8 @@ pub mod ids {
     pub const CRON: &str = "cron";
     pub const URL_PARSE: &str = "url-parse";
     pub const DIFF: &str = "diff";
+    pub const HTTP_REQUEST: &str = "http-request";
+    pub const DNS_LOOKUP: &str = "dns-lookup";
 }
 
 /// Whether running the tool contacts the network.

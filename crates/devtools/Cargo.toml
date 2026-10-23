@@ -12,6 +12,8 @@ path = "src/main.rs"
 [dependencies]
 devtools-core = { workspace = true }
 devtools-tools = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 unicode-segmentation = "=1.10.1"
 
 # macOS: Metal path via font-kit only (no wayland/x11).

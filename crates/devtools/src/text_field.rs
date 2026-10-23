@@ -57,6 +57,16 @@ impl TextField {
         self.scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
     }
+    /// Replace the whole buffer (editable). Emits [`Edited`].
+    pub fn set_input(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.read_only {
+            self.set_output(text, cx);
+            return;
+        }
+        self.buffer.select_all();
+        self.edit(None, text, false, None, cx);
+        self.scroll.set_offset(point(px(0.), px(0.)));
+    }
     pub fn set_placeholder(&mut self, placeholder: &'static str, cx: &mut Context<Self>) {
         self.placeholder = placeholder.into();
         cx.notify();

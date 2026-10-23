@@ -1,10 +1,12 @@
 //! Native offline developer workbench.
 
 mod actions;
+mod prefs;
 mod buffer;
 mod json_run;
 mod inspector_workbench;
 mod json_workbench;
+mod network_workbench;
 mod text_field;
 mod theme;
 mod transform_workbench;

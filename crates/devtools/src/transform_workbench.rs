@@ -90,6 +90,14 @@ impl TransformWorkbench {
     pub fn focus_input(&self, window: &mut Window, cx: &App) {
         self.input.read(cx).focus(window);
     }
+    pub fn set_input_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |field, cx| {
+            field.set_input(text, cx);
+            field.focus(window);
+        });
+        self.notice = "";
+        cx.notify();
+    }
 
     pub fn set_tool(&mut self, tool_id: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         if self.tool_id != tool_id {

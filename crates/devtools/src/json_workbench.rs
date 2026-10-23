@@ -54,6 +54,14 @@ impl JsonWorkbench {
     pub fn focus_input(&self, window: &mut Window, cx: &App) {
         self.input.read(cx).focus(window);
     }
+    pub fn set_input_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |field, cx| {
+            field.set_input(text, cx);
+            field.focus(window);
+        });
+        self.notice = "";
+        cx.notify();
+    }
     fn execute(&mut self, action: JsonAction, window: &mut Window, cx: &mut Context<Self>) {
         let input = self.input.read(cx).buffer.text().to_owned();
         self.run = run_json(&input, action);

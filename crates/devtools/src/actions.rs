@@ -39,6 +39,9 @@ actions!(
         Undo,
         InsertNewline,
         PrimaryRun,
+        ReadClipboard,
+        InsertClipboard,
+        ToggleFavorite,
     ]
 );
 
@@ -103,6 +106,13 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("escape", PaletteClose, Some("CommandPalette")),
         KeyBinding::new("ctrl-enter", PrimaryRun, None),
         KeyBinding::new("cmd-enter", PrimaryRun, None),
+        // One-shot clipboard read (never background watch). Linux: Ctrl+Shift+V.
+        KeyBinding::new("ctrl-shift-v", ReadClipboard, None),
+        KeyBinding::new("cmd-shift-v", ReadClipboard, None),
+        KeyBinding::new("ctrl-shift-i", InsertClipboard, None),
+        KeyBinding::new("cmd-shift-i", InsertClipboard, None),
+        KeyBinding::new("ctrl-shift-f", ToggleFavorite, None),
+        KeyBinding::new("cmd-shift-f", ToggleFavorite, None),
     ];
     cx.bind_keys(keys.drain(..));
 }

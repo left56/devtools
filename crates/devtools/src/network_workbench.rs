@@ -1,0 +1,467 @@
+//! M5 Explicit-network tools: HTTP Request and DNS Lookup.
+//! Opening a tool never sends traffic; the user must click 运行.
+
+use crate::{
+    actions::PrimaryRun,
+    text_field::{Edited, TextField},
+    theme::Theme,
+    ui::{
+        banner, button, chip, kv_row, pane, pane_header, primary_button, status_chip, StatusKind,
+    },
+};
+use devtools_core::ids;
+use devtools_tools::{
+    dns_lookup::{self, DnsResult, RecordKind},
+    http_request::{self, HttpResponse, Method},
+};
+use gpui::{prelude::FluentBuilder, *};
+
+enum NetworkState {
+    Idle,
+    Http(HttpResponse),
+    Dns(DnsResult),
+}
+
+pub struct NetworkWorkbench {
+    tool_id: &'static str,
+    // HTTP: URL; DNS: hostname
+    primary: Entity<TextField>,
+    // HTTP: headers
+    headers: Entity<TextField>,
+    // HTTP: body
+    body: Entity<TextField>,
+    method: Method,
+    state: NetworkState,
+    error: Option<String>,
+    notice: &'static str,
+    result_scroll: ScrollHandle,
+}
+
+impl NetworkWorkbench {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        let primary = cx.new(|cx| TextField::new(false, false, "https://…", cx));
+        let headers = cx.new(|cx| {
+            TextField::new(true, false, "Accept: application/json", cx)
+        });
+        let body = cx.new(|cx| TextField::new(true, false, "请求体（可选）", cx));
+        for field in [&primary, &headers, &body] {
+            cx.subscribe(field, |this, _, _: &Edited, cx| {
+                this.notice = "";
+                cx.notify();
+            })
+            .detach();
+        }
+        Self {
+            tool_id: ids::HTTP_REQUEST,
+            primary,
+            headers,
+            body,
+            method: Method::Get,
+            state: NetworkState::Idle,
+            error: None,
+            notice: "",
+            result_scroll: ScrollHandle::new(),
+        }
+    }
+
+    pub fn focus_input(&self, window: &mut Window, cx: &App) {
+        self.primary.read(cx).focus(window);
+    }
+
+    pub fn set_tool(&mut self, tool_id: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tool_id != tool_id {
+            self.tool_id = tool_id;
+            self.state = NetworkState::Idle;
+            self.error = None;
+            self.notice = "";
+            // Network tools do not share URL/hostname with each other.
+            self.primary.update(cx, |f, cx| {
+                f.clear(cx);
+                f.set_placeholder(primary_placeholder(tool_id), cx);
+            });
+            self.headers.update(cx, |f, cx| f.clear(cx));
+            self.body.update(cx, |f, cx| f.clear(cx));
+            self.method = Method::Get;
+        }
+        self.focus_input(window, cx);
+        cx.notify();
+    }
+
+    pub fn set_input_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.primary.update(cx, |field, cx| {
+            field.set_input(text, cx);
+            field.focus(window);
+        });
+        self.notice = "";
+        cx.notify();
+    }
+
+    fn run(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.error = None;
+        self.state = NetworkState::Idle;
+        let primary = self.primary.read(cx).buffer.text().to_owned();
+        let headers = self.headers.read(cx).buffer.text().to_owned();
+        let body = self.body.read(cx).buffer.text().to_owned();
+
+        let result = match self.tool_id {
+            ids::HTTP_REQUEST => {
+                match http_request::prepare(self.method, &primary, &headers, &body) {
+                    Ok(prepared) => http_request::execute(&prepared)
+                        .map(NetworkState::Http)
+                        .map_err(|e| e.to_string()),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            ids::DNS_LOOKUP => dns_lookup::lookup(&primary, RecordKind::Address)
+                .map(NetworkState::Dns)
+                .map_err(|e| e.to_string()),
+            _ => Err("未知联网工具".into()),
+        };
+
+        match result {
+            Ok(state) => {
+                self.state = state;
+                self.notice = "已更新结果";
+            }
+            Err(message) => {
+                self.error = Some(message);
+                self.notice = "";
+            }
+        }
+        cx.notify();
+    }
+
+    fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.primary.update(cx, |f, cx| {
+            f.clear(cx);
+            f.focus(window);
+        });
+        self.headers.update(cx, |f, cx| f.clear(cx));
+        self.body.update(cx, |f, cx| f.clear(cx));
+        self.state = NetworkState::Idle;
+        self.error = None;
+        self.notice = "";
+        cx.notify();
+    }
+
+    fn title(&self) -> (&'static str, &'static str) {
+        match self.tool_id {
+            ids::HTTP_REQUEST => ("HTTP Request", "显式联网 · 打开不发请求"),
+            ids::DNS_LOOKUP => ("DNS Lookup", "显式联网 · A/AAAA · 打开不查询"),
+            _ => ("网络工具", "显式联网"),
+        }
+    }
+
+    fn method_bar(&self, cx: &mut Context<Self>) -> Div {
+        let theme = Theme::dark();
+        let methods = [
+            Method::Get,
+            Method::Post,
+            Method::Put,
+            Method::Delete,
+            Method::Patch,
+            Method::Head,
+        ];
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1()
+            .child(div().text_xs().text_color(theme.muted).child("方法"));
+        for method in methods {
+            let active = self.method == method;
+            row = row.child(
+                chip(method.as_str(), method.as_str(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.method = method;
+                        cx.notify();
+                    },
+                )),
+            );
+        }
+        row
+    }
+
+    fn result_view(&self, _cx: &mut Context<Self>) -> AnyElement {
+        let theme = Theme::dark();
+        match &self.state {
+            NetworkState::Idle => div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_sm()
+                .text_color(theme.muted)
+                .child("尚未运行 · 确认横幅后点击「运行」才会访问网络")
+                .into_any_element(),
+            NetworkState::Http(response) => {
+                let header_rows: Vec<_> = response
+                    .headers
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (k, v))| {
+                        kv_row(
+                            format!("hdr-{i}"),
+                            k.clone(),
+                            v.clone(),
+                            false,
+                        )
+                    })
+                    .collect();
+                div()
+                    .id("http-result")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.result_scroll)
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(status_chip(
+                                format!("{} {}", response.status, response.status_text),
+                                if (200..300).contains(&response.status) {
+                                    StatusKind::Success
+                                } else if response.status >= 400 {
+                                    StatusKind::Error
+                                } else {
+                                    StatusKind::Warning
+                                },
+                            ))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted)
+                                    .font(crate::theme::monospace())
+                                    .child(response.url.clone()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted)
+                            .child("响应头"),
+                    )
+                    .children(header_rows)
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted)
+                            .child("响应体"),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .p_2()
+                            .rounded_md()
+                            .bg(theme.elevated)
+                            .border_1()
+                            .border_color(theme.border)
+                            .font(crate::theme::monospace())
+                            .text_sm()
+                            .child(response.body.clone()),
+                    )
+                    .into_any_element()
+            }
+            NetworkState::Dns(result) => {
+                let rows: Vec<_> = result
+                    .addresses
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ip)| {
+                        let kind = if ip.is_ipv4() { "A" } else { "AAAA" };
+                        kv_row(format!("ip-{i}"), kind, ip.to_string(), false)
+                    })
+                    .collect();
+                div()
+                    .id("dns-result")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.result_scroll)
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(status_chip(result.kind.label(), StatusKind::Accent))
+                            .child(
+                                div()
+                                    .font(crate::theme::monospace())
+                                    .text_sm()
+                                    .child(result.name.clone()),
+                            )
+                            .child(status_chip(
+                                format!("{} 条", result.addresses.len()),
+                                StatusKind::Neutral,
+                            )),
+                    )
+                    .children(rows)
+                    .into_any_element()
+            }
+        }
+    }
+}
+
+fn primary_placeholder(tool_id: &str) -> &'static str {
+    match tool_id {
+        ids::HTTP_REQUEST => "https://example.com/",
+        ids::DNS_LOOKUP => "example.com 或 localhost",
+        _ => "输入",
+    }
+}
+
+impl Render for NetworkWorkbench {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = Theme::dark();
+        let (title, subtitle) = self.title();
+        let is_http = self.tool_id == ids::HTTP_REQUEST;
+
+        div()
+            .id("network-workbench")
+            .on_action(cx.listener(|this, _: &PrimaryRun, window, cx| this.run(window, cx)))
+            .size_full()
+            .min_w_0()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
+                    .child(status_chip(subtitle, StatusKind::Warning))
+                    .child(div().flex_1())
+                    .when(!self.notice.is_empty(), |view| {
+                        view.child(status_chip(self.notice, StatusKind::Success))
+                    }),
+            )
+            .child(banner(
+                StatusKind::Warning,
+                "会访问网络 · 打开本工具不会发请求；只有点击「运行」才会联网。响应与 URL 不会写入收藏/最近使用。",
+            ))
+            .when(is_http, |view| view.child(self.method_bar(cx)))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        primary_button("network-run", "运行").on_click(cx.listener(
+                            |this, _, window, cx| this.run(window, cx),
+                        )),
+                    )
+                    .child(
+                        button("network-clear", "清空").on_click(cx.listener(
+                            |this, _, window, cx| this.clear(window, cx),
+                        )),
+                    ),
+            )
+            .when_some(self.error.clone(), |view, message| {
+                view.child(banner(StatusKind::Error, message))
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        pane()
+                            .h(if is_http { px(120.) } else { px(80.) })
+                            .flex_shrink_0()
+                            .child(
+                                pane_header()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted)
+                                            .child(if is_http { "URL" } else { "主机名" }),
+                                    )
+                                    .child(div().flex_1())
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted)
+                                            .child("不会自动请求"),
+                                    ),
+                            )
+                            .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
+                    )
+                    .when(is_http, |view| {
+                        view.child(
+                            div()
+                                .h(px(160.))
+                                .flex_shrink_0()
+                                .flex()
+                                .gap_2()
+                                .child(
+                                    pane()
+                                        .flex_1()
+                                        .child(
+                                            pane_header().child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(theme.muted)
+                                                    .child("请求头（Key: Value）"),
+                                            ),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_h_0()
+                                                .p_2()
+                                                .child(self.headers.clone()),
+                                        ),
+                                )
+                                .child(
+                                    pane()
+                                        .flex_1()
+                                        .child(
+                                            pane_header().child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(theme.muted)
+                                                    .child("请求体"),
+                                            ),
+                                        )
+                                        .child(
+                                            div().flex_1().min_h_0().p_2().child(self.body.clone()),
+                                        ),
+                                ),
+                        )
+                    })
+                    .child(
+                        pane()
+                            .flex_1()
+                            .child(
+                                pane_header()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted)
+                                            .child("结果"),
+                                    )
+                                    .child(div().flex_1())
+                                    .child(status_chip("显式联网", StatusKind::Warning)),
+                            )
+                            .child(self.result_view(cx)),
+                    ),
+            )
+    }
+}

@@ -19,6 +19,8 @@ regex = { workspace = true }
 url = { workspace = true }
 similar = { workspace = true }
 cron = { workspace = true }
+ureq = { workspace = true }
+dns-lookup = { workspace = true }
 
 [lints]
 workspace = true
