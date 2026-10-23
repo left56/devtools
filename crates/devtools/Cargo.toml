@@ -1,0 +1,19 @@
+[package]
+name = "devtools"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Native offline developer toolbox"
+
+[[bin]]
+name = "devtools"
+path = "src/main.rs"
+
+[dependencies]
+devtools-core = { workspace = true }
+devtools-tools = { workspace = true }
+gpui = { workspace = true }
+unicode-segmentation = "=1.10.1"
+
+[lints]
+workspace = true

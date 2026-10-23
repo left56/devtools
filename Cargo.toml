@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/devtools",
+    "crates/devtools-core",
+    "crates/devtools-tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+base64 = "0.22"
+devtools-core = { path = "crates/devtools-core" }
+devtools-tools = { path = "crates/devtools-tools" }
+# macOS-only feature set. Do not enable the crate's default features here:
+# they turn on wayland and x11. See docs/plan.md.
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
