@@ -82,3 +82,31 @@ cargo run -p devtools
 - 侧边栏选中行与搜索框跟新 chrome 对齐。
 
 点验：Ctrl+K 切工具 + Ctrl+Enter 运行（与 M3 相同）。macOS Metal 本轮未测。
+
+
+## M4 效率点验（同日稍后）
+
+截图在 `/workspace/devtools-linux-verify-m4/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| 顶栏「读取剪贴板」+ `Ctrl+Shift+V` 读一次（无后台监听文案） | 通过（`final-clipboard-suggest.png`） |
+| 建议条：JSON / JWT 高置信；点击只切换、不改输入；「插入到输入」才写入 | 通过 |
+| 命令面板空查询置顶「最近使用」 | 通过（`final-palette-recents.png`） |
+| 收藏：`Ctrl+Shift+F` / 侧边栏 ★；侧栏出现「★ 收藏」分区 | 通过（`final-favorite.png`） |
+| `prefs.json` 只含工具 id / `used_at` / favorites（无输入输出） | 通过（`$XDG_DATA_HOME/devtools/prefs.json`） |
+
+数据目录（Linux）：`$XDG_DATA_HOME/devtools`，否则 `~/.local/share/devtools`。
+
+## M5 联网工具点验（同日）
+
+截图在 `/workspace/devtools-linux-verify-m5/`。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| HTTP Request 打开即见「会访问网络」横幅；URL 填写后不自动请求 | 通过（`final-http-banner.png`） |
+| 显式运行 `https://example.com/` → `200 OK` + 响应头 | 通过（`final-http-run.png`） |
+| DNS Lookup 打开不查询；运行 `localhost` → `127.0.0.1` / `::1` | 通过（`final-dns.png`） |
+| prefs 仍只有工具 id（无 URL / 响应体） | 通过 |
+
+依赖：`ureq`（HTTP）、`dns-lookup`（系统 A/AAAA）。证书解码 / CSV / SQL 未做。macOS Metal 本轮未测。

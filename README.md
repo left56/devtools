@@ -8,7 +8,7 @@
 
 ## 当前能做什么
 
-M2 变换工具 + M3 检查器已接上。侧边栏目前注册：
+M2 变换、M3 检查器、M4 效率、M5 第一批联网工具已接上。侧边栏目前注册：
 
 | 工具 | 作用 |
 | --- | --- |
@@ -26,15 +26,19 @@ M2 变换工具 + M3 检查器已接上。侧边栏目前注册：
 | Cron | 5 段表达式 → 之后 5 次运行；本机时区或 UTC |
 | URL Parse | 拆分各段与 query；不发请求 |
 | Diff | 行级插入/删除；无外部 diff 进程 |
+| HTTP Request | 显式发送 HTTP；打开不发请求；响应不进 prefs |
+| DNS Lookup | 显式 A/AAAA；打开不查询 |
 
 共用能力：
 
 - 自研多行输入：选择、复制/剪切/粘贴、滚动、等宽字体、最多 128 步线性撤销（无 redo）。
 - macOS 原生三色按钮与暗色内容区融合；侧边栏按「分类 → 工具」折叠；原文与结果左右分栏。
 - 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；`cmd-k` 命令面板。
-- 系统剪贴板仅在用户粘贴、剪切或复制时读写，没有后台监听。不根据内容自动切换工具。
+- 系统剪贴板：**无后台监听**。`Ctrl+Shift+V`（macOS `Cmd+Shift+V`）读一次 → 建议条；`Ctrl+Shift+I` 才插入当前输入。建议点击只切换工具。
+- 最近使用 / 收藏：本地 `prefs.json`（只存工具 id 与时间戳）。Linux：`$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS：`~/Library/Application Support/Devtools`。
+- 联网工具打开默认离线；运行前横幅标明「会访问网络」。
 
-`cargo test --workspace`（当前 tools 层 66 个单测，含 JWT `alg:none` / 过期 `exp`）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2/M3 壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-m3/`）。macOS 真机点验仍待补。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
+`cargo test --workspace`（tools 层 74 个单测）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2–M5 壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)、`/workspace/devtools-linux-verify-m4/`、`/workspace/devtools-linux-verify-m5/`）。macOS 真机点验仍待补。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
 
 ## 环境
 
@@ -60,7 +64,7 @@ xcodebuild -downloadComponent MetalToolchain
 | macOS Apple Silicon | 下一轮适配（透明标题栏 / traffic lights 已 `cfg` 隔离） |
 | Windows x86 | 更后；`windows-manifest` feature 占位，未验证 |
 
-已知剩余差异：macOS 融合标题栏与签名分发；Linux Wayland 未验；M4 数据目录路径仍按系统另定。`xattr` 0.2 与新 `libc` 的冲突见 `patches/`。
+已知剩余差异：macOS 融合标题栏与签名分发（Metal 本轮未复验）；Linux Wayland 未验；证书/CSV/SQL 仍为后续。`xattr` 0.2 与新 `libc` 的冲突见 `patches/`。
 
 ## 命令
 

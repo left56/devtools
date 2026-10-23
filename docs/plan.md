@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具、**M3 检查器**（JWT / Regex / Cron / URL Parse / Diff）已落盘。M4 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md)、`/workspace/devtools-linux-verify-m3/`（M3）与 `/workspace/devtools-linux-verify-ui/`（UI 打磨）。
+状态：M0–M3、**M4 效率**（剪贴板一次读取、建议条、最近使用/收藏）、**M5 第一批联网工具**（HTTP Request、DNS Lookup）已落盘。M6 分发仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md)、`/workspace/devtools-linux-verify-m3/`（M3）、`/workspace/devtools-linux-verify-ui/`（UI）、`/workspace/devtools-linux-verify-m4/`（M4）、`/workspace/devtools-linux-verify-m5/`（M5）。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -43,7 +43,7 @@ Devtools 是一个本机桌面工具箱：
 - 把 JWT 解码说成验签。`alg: none` 永远不能显示成可信。
 - MD5 / SHA-1 当作密码哈希。界面上要写明它们只用于校验和兼容。
 - 后台剪贴板监视、全局常驻状态栏。全局热键单独调研，不放进 M1。
-- HTTP 客户端、DNS、WHOIS、端口扫描。它们是 M5，而且必须标成会访问网络。
+- WHOIS、端口扫描。HTTP / DNS 已在 M5 第一批以 `NetworkUse::Explicit` 落地；端口扫描仍不做。
 - AI 功能。
 
 ## 约束
@@ -61,7 +61,7 @@ Devtools 是一个本机桌面工具箱：
 
 ## 当前状态
 
-M0、M1、M2、M3 已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
+M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
 
 已实现：
 
@@ -81,15 +81,18 @@ M0、M1、M2、M3 已实现。**当前验收主机是 Linux x86_64 + X11**（`ca
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
 - **UI 视觉打磨**：主题分层、主/次按钮、检查器布局（JWT 堆叠卡、Diff 上下结构、URL KV 行）；Linux Xvfb 截图见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-ui/`。
 - **通用变换工作台**（`TransformWorkbench`）：复用同一套编辑器与左右分栏，按工具切换动作与选项（字母表、算法、时区、进制、命名风格等）。切换变换类工具时保留输入、清除上次运行结果。不自动切工具。
+- **M4 效率**：顶栏「读取剪贴板」（Linux `Ctrl+Shift+V` / macOS `Cmd+Shift+V`，只读一次）→ 建议条（`applicable_suggestions`，点击只切换工具）+「插入到输入」（`Ctrl+Shift+I`）；最近使用/收藏写入本地 JSON（只存工具 id 与时间戳）。命令面板空查询时置顶最近使用。`Ctrl+Shift+F` 切换收藏。
+- **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
+- **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。
 - macOS 透明原生标题栏融合暗色内容；侧边栏分类文件夹；`cmd-b` 收起；`cmd-k` 命令面板。
 - `suggest` 纯函数：JSON / JWT 结构 / 时间戳 / 标准 Base64。猜中也不自动切换；未注册工具不会出现在 `applicable_suggestions` 里。
 - `cmd-w` 和最后一个窗口关闭时退出。
 
 未实现：
 
-- 收藏、最近使用、建议条、单独的「读取剪贴板」按钮。
-- ~~M3 检查器~~（已实现）。
-- 打包、签名、菜单栏、全局热键。
+- ~~M3 检查器 / M4 效率 / M5 HTTP+DNS~~（已实现）。
+- M5 后续：证书解码、CSV、SQL 格式化（仍为 P2，未分配 id）。
+- 打包、签名、菜单栏、全局热键、状态栏图标、登录项、后台剪贴板监听。
 - 语法高亮、自动折行、多光标和 redo。
 - macOS 真机点验与签名分发；Linux Wayland；Windows 壳（见下方「跨平台意图」）。
 
@@ -121,6 +124,8 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 
 2026-10-23：M3 检查器（jwt / regex / cron / url-parse / diff）在 Linux x86_64 落盘并接 `InspectorWorkbench`。`devtools-tools` 单测扩到含 alg:none 与过期 exp；全工作区 `cargo test --workspace`（66 tools 层）与 clippy `-D warnings` 通过；Xvfb + lavapipe 交互截图见 `/workspace/devtools-linux-verify-m3/`。
 
+2026-10-23：M4 效率 + M5 第一批联网落盘。prefs 只存 id/时间戳/收藏；tools 层 74 个单测；`cargo test --workspace` + clippy `-D warnings` 通过；Xvfb 截图见 `/workspace/devtools-linux-verify-m4/` 与 `/workspace/devtools-linux-verify-m5/`。
+
 
 ## 架构
 
@@ -140,7 +145,7 @@ devtools-core       分类、ToolMeta、注册表、搜索、稳定 id
 - 交互工具的状态放在壳里。例如正则的高亮、HTTP 的请求编辑、JSON 树。它们调用 tools crate 里的纯函数，不把 GPUI 类型传进 tools。
 - 纯文本变换不必上 trait。一个工具一个模块，导出 `meta()` 和具体函数即可。等出现第三种相同形状再抽 trait，不提前抽。
 
-数据流（M1 已实现输入、运行和复制，显式读取与建议条留到 M4）：
+数据流（M1–M4 已实现输入、运行、复制、显式读取与建议条）：
 
 1. 用户在编辑器里输入，或按一次「读取剪贴板」。
 2. 壳把 `&str` 交给对应函数。
@@ -214,9 +219,11 @@ id 一旦发布给注册表就不要改。显示名可以改。
 | 已实现 | `cron` | 时间 | M3，Ready | 5 段 cron，之后 5 次运行。时区可选本机或 UTC，界面写明 |
 | 已实现 | `url-parse` | 网络 | M3，Ready | 只拆分，不发请求。`NetworkUse::Offline` |
 | 已实现 | `diff` | 文本 | M3，Ready | 行级插入/删除。纯 Rust（`similar`），不调用外部 diff 进程 |
-| P2 | HTTP、DNS、证书解码、CSV、SQL 格式化 | — | M5 之后 | 未分配 id。联网工具用 `NetworkUse::Explicit` |
+| 已实现 | `http-request` | 网络 | M5，Ready | 显式 HTTP。打开不发请求；`NetworkUse::Explicit`；响应不进 prefs |
+| 已实现 | `dns-lookup` | 网络 | M5，Ready | 显式 A/AAAA（系统解析器）。打开不查询；`NetworkUse::Explicit` |
+| P2 | 证书解码、CSV、SQL 格式化 | — | M5 之后 | 未分配 id。保持 Offline 或按需 Explicit |
 
-P2 没有 id，就是为了避免半成品出现在注册表里。
+未注册的工具没有 id，就是为了避免半成品出现在注册表里。
 
 ## 阶段
 
@@ -287,25 +294,23 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 验收：每个工具有不启动窗口的测试（含 JWT `alg: none` 与过期 `exp`）。Linux x86_64 上 `cargo test --workspace` + clippy `-D warnings` + Xvfb/lavapipe 交互点验通过。
 
-### M4 效率
+### M4 效率（已完成）
 
-- 「读取剪贴板」按钮和快捷键，读一次，送到当前工具或建议条。
-- 建议条使用 `applicable_suggestions`。点击才切换。切换时如果编辑器非空，要保留内容还是替换，默认保留，由用户把剪贴板内容插入。
-- 最近使用和收藏写入本地 JSON。路径等到实现时定，候选是 `~/Library/Application Support/Devtools/`。文件里只存工具 id 和时间，不存工具输入。
-- 命令面板补最近使用。
+- 「读取剪贴板」按钮 + Linux `Ctrl+Shift+V` / macOS `Cmd+Shift+V`：只读一次，喂给建议条；「插入到输入」（`Ctrl+Shift+I`）才写入当前工具输入。不自动替换。
+- 建议条使用 `applicable_suggestions`。点击只切换工具；默认保留编辑器内容。
+- 最近使用和收藏：`prefs.json`，只存工具 id、`used_at`、favorites。路径：Linux `$XDG_DATA_HOME/devtools`（或 `~/.local/share/devtools`）；macOS `~/Library/Application Support/Devtools`。
+- 命令面板空查询时置顶最近使用；侧边栏「★ 收藏」分区；`Ctrl+Shift+F` 切换当前工具收藏。
 
-不做：状态栏图标、登录项、后台监听。
+不做：状态栏图标、登录项、后台监听、全局热键产品化。
 
-全局热键只有在查清 GPUI 0.2.2 或一层很小的 macOS API 之后另开任务。查不清就保持窗口内快捷键，不阻塞发布。
-
-### M5 联网工具
+### M5 联网工具（第一批已完成）
 
 单独阶段，因为信任模型和前面不同。
 
-- 新工具的 `NetworkUse` 用 `Explicit`。界面在运行前显示「会访问网络」，不能只写在关于页。
-- 默认不发请求。打开工具不等于请求。
-- 响应和 URL 不进收藏文件，不进日志。
-- 第一批候选：HTTP 请求、DNS 查询。端口扫描不在候选里。
+- `http-request` / `dns-lookup`：`NetworkUse::Explicit`。界面横幅「会访问网络」；打开 ≠ 请求；只有「运行」/ `Ctrl+Enter` 才联网。
+- 响应和 URL 不进收藏/最近使用文件，不进日志。
+- HTTP：方法芯片 + URL / 头 / 体；`ureq` 阻塞发送。DNS：主机名 → A/AAAA（`dns-lookup` + 系统解析器）。
+- 端口扫描不在范围。证书解码 / CSV / SQL 格式化仍为后续 P2。
 
 ### M6 macOS 分发
 
@@ -343,12 +348,12 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 - 最终产品名和 macOS bundle id。没有选定域名之前，窗口不设置 `app_id`。
 - 许可证。仓库 `publish = false`，避免误发到 crates.io。
-- 本地数据目录是否就用 `~/Library/Application Support/Devtools/`。M4 实现前再定。
-- 全局热键和状态栏要不要做。M4 只调研，不承诺。
+- ~~本地数据目录~~：已定（见「当前状态」与 M4）。
+- 全局热键和状态栏要不要做。已调研范围外；不承诺。
 - 亮色主题和英文界面。当前不做。
 
 ## 建议的下一步
 
-1. 在 macOS 真机上复验 M2 + M3（标题栏融合、触控板/IME、鼠标点按钮、检查器多栏布局）。
-2. 按 M1 验证记录补长文本压力检查；Linux 上变换工具顶栏按钮的鼠标命中可再查。
-3. 开 M4（剪贴板读取、建议条、最近使用/收藏）。Windows 壳不要抢在 macOS 真机复验前宣称可用。
+1. 合并当前 PR（M2–M5）后，在 macOS 真机复验（标题栏融合、触控板/IME、Metal、剪贴板权限）。
+2. 按需做 M5 后续：证书解码、CSV、SQL 格式化。
+3. M6 分发（`.app` / 签名）取决于 Apple 账号。Windows 壳不要抢在 macOS 真机复验前宣称可用。
