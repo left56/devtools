@@ -5,7 +5,10 @@ use crate::{
     actions::PrimaryRun,
     text_field::{Edited, TextField},
     theme::Theme,
-    ui::{button, chip, pane, pane_header},
+    ui::{
+        banner, button, card, chip, kv_row, pane, pane_header, primary_button, status_chip,
+        StatusKind,
+    },
 };
 use devtools_core::ids;
 use devtools_tools::{
@@ -21,9 +24,17 @@ enum InspectorState {
     Idle,
     Jwt(JwtDecode),
     Regex(RegexResult),
-    Cron { lines: Vec<String>, zone: &'static str, expr: String },
+    Cron {
+        lines: Vec<String>,
+        zone: &'static str,
+        expr: String,
+    },
     Url(UrlParts),
-    Diff { lines: Vec<DiffLine>, inserts: usize, deletes: usize },
+    Diff {
+        lines: Vec<DiffLine>,
+        inserts: usize,
+        deletes: usize,
+    },
 }
 
 pub struct InspectorWorkbench {
@@ -99,11 +110,17 @@ impl InspectorWorkbench {
         self.state = InspectorState::Idle;
 
         let result = match self.tool_id {
-            ids::JWT => jwt::decode(&primary).map(InspectorState::Jwt).map_err(|e| e.to_string()),
+            ids::JWT => jwt::decode(&primary)
+                .map(InspectorState::Jwt)
+                .map_err(|e| e.to_string()),
             ids::REGEX => {
                 let replacement = {
                     let t = tertiary.trim();
-                    if t.is_empty() { None } else { Some(t) }
+                    if t.is_empty() {
+                        None
+                    } else {
+                        Some(t)
+                    }
                 };
                 // secondary = pattern, primary = haystack
                 regex_tool::run(&secondary, &primary, replacement)
@@ -180,18 +197,22 @@ impl InspectorWorkbench {
         if self.tool_id == ids::CRON {
             row = row
                 .child(div().text_xs().text_color(theme.muted).child("时区"))
-                .child(chip("cron-local", "本机", matches!(self.cron_zone, CronZone::Local)).on_click(
-                    cx.listener(|this, _, window, cx| {
-                        this.cron_zone = CronZone::Local;
-                        this.run(window, cx);
-                    }),
-                ))
-                .child(chip("cron-utc", "UTC", matches!(self.cron_zone, CronZone::Utc)).on_click(
-                    cx.listener(|this, _, window, cx| {
-                        this.cron_zone = CronZone::Utc;
-                        this.run(window, cx);
-                    }),
-                ));
+                .child(
+                    chip("cron-local", "本机", matches!(self.cron_zone, CronZone::Local)).on_click(
+                        cx.listener(|this, _, window, cx| {
+                            this.cron_zone = CronZone::Local;
+                            this.run(window, cx);
+                        }),
+                    ),
+                )
+                .child(
+                    chip("cron-utc", "UTC", matches!(self.cron_zone, CronZone::Utc)).on_click(
+                        cx.listener(|this, _, window, cx| {
+                            this.cron_zone = CronZone::Utc;
+                            this.run(window, cx);
+                        }),
+                    ),
+                );
         }
         if self.tool_id == ids::REGEX {
             row = row.child(
@@ -208,10 +229,11 @@ impl InspectorWorkbench {
         let theme = Theme::dark();
         div()
             .flex()
+            .items_center()
             .gap_2()
             .flex_shrink_0()
             .child(
-                button("inspect-run", "运行").on_mouse_down(
+                primary_button("inspect-run", "运行").on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, _: &MouseDownEvent, window, cx| {
                         cx.stop_propagation();
@@ -236,89 +258,103 @@ impl InspectorWorkbench {
             )
     }
 
-    fn input_area(&self, cx: &mut Context<Self>) -> Div {
-        match self.tool_id {
-            ids::REGEX => div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .flex_1()
-                .min_h_0()
-                .child(self.run_clear_row(cx))
-                .child(
-                    pane()
-                        .h(px(72.))
-                        .flex_shrink_0()
-                        .child(pane_header().child(div().text_sm().child("模式（Rust regex）")))
-                        .child(div().flex_1().p_2().child(self.secondary.clone())),
-                )
-                .child(
-                    pane()
-                        .flex_1()
-                        .child(pane_header().child(div().text_sm().flex_1().child("被测文本")))
-                        .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
-                )
-                .child(
-                    pane()
-                        .h(px(64.))
-                        .flex_shrink_0()
-                        .child(pane_header().child(div().text_sm().child("替换（可选）")))
-                        .child(div().flex_1().p_2().child(self.tertiary.clone())),
-                ),
-            ids::DIFF => div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .flex_1()
-                .min_h_0()
-                .child(self.run_clear_row(cx))
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .flex_1()
-                        .min_h_0()
-                        .child(
-                            pane()
-                                .flex_1()
-                                .child(pane_header().child(div().text_sm().child("原文（旧）")))
-                                .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
-                        )
-                        .child(
-                            pane()
-                                .flex_1()
-                                .child(pane_header().child(div().text_sm().child("新文本")))
-                                .child(
-                                    div().flex_1().min_h_0().p_2().child(self.secondary.clone()),
-                                ),
+    /// JWT / Cron / URL: compact top input strip (not a tall side column).
+    fn compact_input_strip(&self, cx: &mut Context<Self>) -> Div {
+        let height = match self.tool_id {
+            ids::JWT | ids::URL_PARSE => px(100.),
+            ids::CRON => px(88.),
+            _ => px(120.),
+        };
+        pane()
+            .h(height)
+            .flex_shrink_0()
+            .child(
+                pane_header()
+                    .child(div().text_sm().flex_1().child(primary_label(self.tool_id)))
+                    .child(
+                        primary_button("inspect-run", "运行").on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.run(window, cx);
+                            }),
                         ),
-                ),
-            _ => pane()
-                .flex_1()
-                .child(
-                    pane_header()
-                        .child(div().text_sm().flex_1().child(primary_label(self.tool_id)))
-                        .child(
-                            button("inspect-run", "运行").on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.run(window, cx);
-                                }),
-                            ),
-                        )
-                        .child(
-                            button("inspect-clear", "清空").on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.clear(window, cx);
-                                }),
-                            ),
+                    )
+                    .child(
+                        button("inspect-clear", "清空").on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.clear(window, cx);
+                            }),
                         ),
-                )
-                .child(div().flex_1().min_h_0().p_3().child(self.primary.clone())),
-        }
+                    ),
+            )
+            .child(div().flex_1().min_h_0().p_2().child(self.primary.clone()))
+    }
+
+    fn regex_input(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .w(relative(0.40))
+            .flex_shrink_0()
+            .h_full()
+            .min_h_0()
+            .child(self.run_clear_row(cx))
+            .child(
+                pane()
+                    .h(px(64.))
+                    .flex_shrink_0()
+                    .child(pane_header().child(div().text_sm().child("模式（Rust regex）")))
+                    .child(div().flex_1().p_2().child(self.secondary.clone())),
+            )
+            .child(
+                pane()
+                    .flex_1()
+                    .child(pane_header().child(div().text_sm().flex_1().child("被测文本")))
+                    .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
+            )
+            .child(
+                pane()
+                    .h(px(56.))
+                    .flex_shrink_0()
+                    .child(pane_header().child(div().text_sm().child("替换（可选）")))
+                    .child(div().flex_1().p_2().child(self.tertiary.clone())),
+            )
+    }
+
+    /// Diff: side-by-side inputs capped to ~38% height.
+    fn diff_inputs(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .h(relative(0.30))
+            .flex_shrink_0()
+            .min_h(px(140.))
+            .max_h(px(260.))
+            .child(self.run_clear_row(cx))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        pane()
+                            .flex_1()
+                            .child(pane_header().child(div().text_sm().child("原文（旧）")))
+                            .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
+                    )
+                    .child(
+                        pane()
+                            .flex_1()
+                            .child(pane_header().child(div().text_sm().child("新文本")))
+                            .child(div().flex_1().min_h_0().p_2().child(self.secondary.clone())),
+                    ),
+            )
     }
 
     fn result_area(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -329,6 +365,10 @@ impl InspectorWorkbench {
                 .flex()
                 .items_center()
                 .justify_center()
+                .rounded_lg()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.panel)
                 .text_color(theme.muted)
                 .child("运行后在这里显示结构化结果")
                 .into_any_element(),
@@ -341,9 +381,14 @@ impl InspectorWorkbench {
                     .map(|(i, line)| {
                         div()
                             .id(SharedString::from(format!("cron-{i}")))
+                            .mx_2()
+                            .my_1()
                             .px_3()
                             .py_2()
+                            .rounded_md()
+                            .bg(theme.elevated)
                             .font(crate::theme::monospace())
+                            .text_sm()
                             .child(format!("{}. {line}", i + 1))
                     })
                     .collect();
@@ -351,8 +396,19 @@ impl InspectorWorkbench {
                     .flex_1()
                     .child(
                         pane_header()
-                            .child(div().text_sm().flex_1().child(format!("之后 {} 次 · {zone}", lines.len())))
-                            .child(div().text_xs().text_color(theme.muted).child(expr.clone())),
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .flex_1()
+                                    .child(format!("之后 {} 次 · {zone}", lines.len())),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font(crate::theme::monospace())
+                                    .text_color(theme.muted)
+                                    .child(expr.clone()),
+                            ),
                     )
                     .child(
                         div()
@@ -361,6 +417,7 @@ impl InspectorWorkbench {
                             .min_h_0()
                             .overflow_y_scroll()
                             .track_scroll(&self.result_scroll)
+                            .py_1()
                             .children(rows),
                     )
                     .into_any_element()
@@ -380,72 +437,81 @@ impl InspectorWorkbench {
         let header = decoded.header_raw.clone();
         let payload = decoded.payload_raw.clone();
         let sig = decoded.signature_raw.clone();
-        let mut warnings = div().flex().flex_col().gap_1();
-        warnings = warnings.child(
-            div()
-                .text_sm()
-                .text_color(rgb(0xe5c78b))
-                .child(decoded.unsigned_notice),
-        );
+
+        let mut banners = div().flex().flex_col().gap_1().flex_shrink_0();
+        banners = banners.child(banner(StatusKind::Warning, decoded.unsigned_notice));
         if decoded.alg_is_none {
-            warnings = warnings.child(
-                div()
-                    .text_sm()
-                    .text_color(theme.error)
-                    .child(format!("alg 原文为 `{alg_text}` · 不受信任 · 不是验签成功")),
-            );
+            banners = banners.child(banner(
+                StatusKind::Error,
+                format!("alg 原文为 `{alg_text}` · 不受信任 · 不是验签成功"),
+            ));
         } else {
-            warnings = warnings.child(
+            banners = banners.child(
                 div()
+                    .px_1()
                     .text_xs()
                     .text_color(theme.muted)
                     .child(format!("alg 原文：{alg_text}")),
             );
         }
         if let Some(exp) = &decoded.exp {
-            let color = if exp.expired { theme.error } else { theme.muted };
+            let kind = if exp.expired {
+                StatusKind::Error
+            } else {
+                StatusKind::Neutral
+            };
             let status = if exp.expired { "已过期" } else { "尚未过期" };
-            warnings = warnings.child(
-                div()
-                    .text_sm()
-                    .text_color(color)
-                    .child(format!(
-                        "exp = {} → {} · {} · 未验签",
-                        exp.unix_seconds, exp.utc_display, status
-                    )),
-            );
+            banners = banners.child(banner(
+                kind,
+                format!(
+                    "exp = {} → {} · {} · 未验签",
+                    exp.unix_seconds, exp.utc_display, status
+                ),
+            ));
         }
 
+        // Stacked cards sized to content — no equal-height empty columns.
         div()
             .flex_1()
             .min_h_0()
             .flex()
             .flex_col()
             .gap_2()
-            .child(warnings)
+            .child(banners)
             .child(
                 div()
+                    .id("jwt-cards")
                     .flex_1()
                     .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.result_scroll)
                     .flex()
+                    .flex_col()
                     .gap_2()
-                    .child(self.json_pane("header", "Header", header, cx))
-                    .child(self.json_pane("payload", "Payload", payload, cx))
-                    .child(self.json_pane("signature", "Signature（原文）", sig, cx)),
+                    .child(self.json_card("header", "Header", header, cx))
+                    .child(self.json_card("payload", "Payload", payload, cx))
+                    .child(self.json_card("signature", "Signature（原文）", sig, cx)),
             )
             .into_any_element()
     }
 
-    fn json_pane(
+    fn json_card(
         &self,
         id: &'static str,
         title: &'static str,
         body: String,
         cx: &mut Context<Self>,
     ) -> Div {
+        let theme = Theme::dark();
         let copy = body.clone();
-        pane()
-            .flex_1()
+        let display = if body.is_empty() {
+            SharedString::from("（空）")
+        } else {
+            SharedString::from(body)
+        };
+        let empty = display.as_ref() == "（空）";
+        card()
+            .flex_shrink_0()
             .child(
                 pane_header()
                     .child(div().text_sm().flex_1().child(title))
@@ -456,13 +522,11 @@ impl InspectorWorkbench {
             .child(
                 div()
                     .id(SharedString::from(format!("{id}-body")))
-                    .flex_1()
-                    .min_h_0()
                     .p_3()
                     .font(crate::theme::monospace())
                     .text_sm()
-                    .overflow_y_scroll()
-                    .child(body),
+                    .text_color(if empty { theme.muted } else { theme.text })
+                    .child(display),
             )
     }
 
@@ -478,10 +542,7 @@ impl InspectorWorkbench {
                     .iter()
                     .enumerate()
                     .map(|(j, c)| {
-                        let label = c
-                            .name
-                            .clone()
-                            .unwrap_or_else(|| j.to_string());
+                        let label = c.name.clone().unwrap_or_else(|| j.to_string());
                         format!("  [{label}] {}..{} {:?}", c.start, c.end, c.text)
                     })
                     .collect::<Vec<_>>()
@@ -491,7 +552,9 @@ impl InspectorWorkbench {
                     .p_2()
                     .mb_1()
                     .rounded_md()
-                    .bg(theme.bg)
+                    .bg(theme.elevated)
+                    .border_1()
+                    .border_color(theme.border_subtle)
                     .font(crate::theme::monospace())
                     .text_xs()
                     .child(format!("#{i} {}..{} {:?}", m.start, m.end, m.full))
@@ -499,15 +562,12 @@ impl InspectorWorkbench {
             })
             .collect();
 
-        let mut view = pane().flex_1().child(
-            pane_header()
-                .child(
-                    div()
-                        .text_sm()
-                        .flex_1()
-                        .child(format!("{} 处匹配 · {}", result.matches.len(), result.syntax_note)),
-                ),
-        );
+        let mut view = pane().flex_1().child(pane_header().child(
+            div()
+                .text_sm()
+                .flex_1()
+                .child(format!("{} 处匹配 · {}", result.matches.len(), result.syntax_note)),
+        ));
         if let Some(replaced) = &result.replaced {
             let copy = replaced.clone();
             view = view.child(
@@ -521,13 +581,24 @@ impl InspectorWorkbench {
                     .child(
                         div()
                             .flex()
-                            .child(div().text_xs().text_color(theme.muted).flex_1().child("替换结果"))
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted)
+                                    .flex_1()
+                                    .child("替换结果"),
+                            )
                             .child(button("copy-repl", "复制").on_click(cx.listener(
                                 move |this, _, _, cx| this.copy_blob(copy.clone(), cx),
                             ))),
                     )
                     .child(
                         div()
+                            .px_2()
+                            .py_1()
+                            .rounded_md()
+                            .bg(theme.elevated)
                             .font(crate::theme::monospace())
                             .text_sm()
                             .child(replaced.clone()),
@@ -549,89 +620,105 @@ impl InspectorWorkbench {
 
     fn url_result(&self, parts: &UrlParts, cx: &mut Context<Self>) -> AnyElement {
         let theme = Theme::dark();
-        let fields = [
-            ("href", parts.href.as_str()),
-            ("scheme", parts.scheme.as_str()),
-            ("username", parts.username.as_str()),
-            ("password", parts.password.as_str()),
-            ("host", parts.host.as_str()),
-            (
-                "port",
-                &parts
-                    .port
-                    .map(|p| p.to_string())
-                    .unwrap_or_default(),
-            ),
-            ("path", parts.path.as_str()),
-            ("query", parts.query.as_str()),
-            ("fragment", parts.fragment.as_str()),
-        ];
-        let mut rows: Vec<AnyElement> = fields
+
+        // Keep important structural fields; omit blank auth / fragment noise.
+        let mut field_defs: Vec<(&'static str, String, bool)> = Vec::new();
+        field_defs.push(("href", parts.href.clone(), parts.href.is_empty()));
+        field_defs.push(("scheme", parts.scheme.clone(), parts.scheme.is_empty()));
+        if !parts.username.is_empty() {
+            field_defs.push(("username", parts.username.clone(), false));
+        }
+        if !parts.password.is_empty() {
+            field_defs.push(("password", parts.password.clone(), false));
+        }
+        field_defs.push(("host", parts.host.clone(), parts.host.is_empty()));
+        let port_str = parts.port.map(|p| p.to_string()).unwrap_or_default();
+        if !port_str.is_empty() {
+            field_defs.push(("port", port_str, false));
+        }
+        field_defs.push(("path", parts.path.clone(), parts.path.is_empty()));
+        if !parts.query.is_empty() {
+            field_defs.push(("query", parts.query.clone(), false));
+        }
+        if !parts.fragment.is_empty() {
+            field_defs.push(("fragment", parts.fragment.clone(), false));
+        }
+
+        let mut rows: Vec<AnyElement> = field_defs
             .into_iter()
-            .map(|(k, v)| {
-                let copy = v.to_owned();
+            .map(|(k, v, empty)| {
+                let copy = v.clone();
                 div()
                     .id(SharedString::from(format!("url-{k}")))
                     .flex()
-                    .items_center()
+                    .items_start()
                     .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(theme.border)
+                    .child(kv_row(format!("url-kv-{k}"), k, v, empty).flex_1())
                     .child(
-                        div()
-                            .w(px(90.))
-                            .flex_shrink_0()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child(k),
+                        div().pt_1().child(copy_chip(format!("copy-{k}"), copy, cx)),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .font(crate::theme::monospace())
-                            .text_sm()
-                            .child(v.to_owned()),
-                    )
-                    .child(copy_chip(format!("copy-{k}"), copy.clone(), cx))
                     .into_any_element()
             })
             .collect();
 
-        for (i, (k, v)) in parts.query_pairs.iter().enumerate() {
-            let copy = format!("{k}={v}");
+        if !parts.query_pairs.is_empty() {
             rows.push(
                 div()
-                    .id(SharedString::from(format!("qp-{i}")))
+                    .mt_2()
+                    .mb_1()
+                    .px_3()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .px_3()
-                    .py_2()
                     .child(
                         div()
-                            .w(px(90.))
                             .text_xs()
                             .text_color(theme.accent)
-                            .child(format!("query[{i}]")),
+                            .child("Query Params"),
                     )
                     .child(
                         div()
                             .flex_1()
-                            .font(crate::theme::monospace())
-                            .text_sm()
-                            .child(copy.clone()),
+                            .h(px(1.))
+                            .bg(theme.border_subtle),
                     )
-                    .child(copy_chip(format!("copy-qp-{i}"), copy.clone(), cx))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted)
+                            .child(format!("{} 对", parts.query_pairs.len())),
+                    )
                     .into_any_element(),
             );
+            for (i, (k, v)) in parts.query_pairs.iter().enumerate() {
+                let copy = format!("{k}={v}");
+                let label = if k.is_empty() {
+                    format!("[{i}]")
+                } else {
+                    k.clone()
+                };
+                rows.push(
+                    div()
+                        .id(SharedString::from(format!("qp-{i}")))
+                        .flex()
+                        .items_start()
+                        .gap_2()
+                        .child(kv_row(format!("qp-kv-{i}"), label, v.clone(), v.is_empty()).flex_1())
+                        .child(
+                            div()
+                                .pt_1()
+                                .child(copy_chip(format!("copy-qp-{i}"), copy, cx)),
+                        )
+                        .into_any_element(),
+                );
+            }
         }
 
         pane()
             .flex_1()
-            .child(pane_header().child(div().text_sm().child("URL 各段（未发请求）")))
+            .child(
+                pane_header().child(div().text_sm().flex_1().child("URL 各段（未发请求）")),
+            )
             .child(
                 div()
                     .id("url-parts")
@@ -639,6 +726,7 @@ impl InspectorWorkbench {
                     .min_h_0()
                     .overflow_y_scroll()
                     .track_scroll(&self.result_scroll)
+                    .py_2()
                     .children(rows),
             )
             .into_any_element()
@@ -658,8 +746,8 @@ impl InspectorWorkbench {
             .map(|(i, line)| {
                 let (prefix, color, bg) = match line.kind {
                     LineKind::Equal => (" ", theme.text, theme.panel),
-                    LineKind::Insert => ("+", rgb(0xa8d6aa), rgb(0x1e2a22)),
-                    LineKind::Delete => ("-", rgb(0xff9292), rgb(0x2a1e1e)),
+                    LineKind::Insert => ("+", theme.success, theme.success_bg),
+                    LineKind::Delete => ("-", theme.error, theme.error_bg),
                 };
                 let old = line
                     .old_line
@@ -674,14 +762,14 @@ impl InspectorWorkbench {
                     .flex()
                     .gap_2()
                     .px_2()
-                    .py_1()
+                    .py_0p5()
                     .bg(bg)
                     .font(crate::theme::monospace())
                     .text_sm()
                     .text_color(color)
                     .child(div().w(px(28.)).text_color(theme.muted).child(old))
                     .child(div().w(px(28.)).text_color(theme.muted).child(new))
-                    .child(div().w(px(14.)).child(prefix))
+                    .child(div().w(px(14.)).font_weight(FontWeight::BOLD).child(prefix))
                     .child(div().flex_1().child(line.text.clone()))
             })
             .collect();
@@ -689,11 +777,10 @@ impl InspectorWorkbench {
         pane()
             .flex_1()
             .child(
-                pane_header().child(
-                    div()
-                        .text_sm()
-                        .child(format!("+{inserts}  /  -{deletes}")),
-                ),
+                pane_header()
+                    .child(div().text_sm().flex_1().child("对比结果"))
+                    .child(status_chip(format!("+{inserts}"), StatusKind::Success))
+                    .child(status_chip(format!("-{deletes}"), StatusKind::Error)),
             )
             .child(
                 div()
@@ -706,8 +793,44 @@ impl InspectorWorkbench {
             )
             .into_any_element()
     }
-}
 
+    fn body(&self, cx: &mut Context<Self>) -> Div {
+        match self.tool_id {
+            // Vertical: compact input on top, results fill the rest.
+            ids::JWT | ids::URL_PARSE | ids::CRON => div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(self.compact_input_strip(cx))
+                .child(self.result_area(cx)),
+            // Vertical: side-by-side inputs (capped), full-width diff below.
+            ids::DIFF => div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(self.diff_inputs(cx))
+                .child(self.result_area(cx)),
+            // Side-by-side still fits Regex (multi-field left, matches right).
+            ids::REGEX => div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .flex()
+                .gap_3()
+                .child(self.regex_input(cx))
+                .child(self.result_area(cx)),
+            _ => div()
+                .flex_1()
+                .child(div().text_color(Theme::dark().muted).child("未知检查器")),
+        }
+    }
+}
 
 fn copy_chip(id: String, value: String, cx: &mut Context<InspectorWorkbench>) -> Stateful<Div> {
     let theme = Theme::dark();
@@ -715,11 +838,15 @@ fn copy_chip(id: String, value: String, cx: &mut Context<InspectorWorkbench>) ->
         .id(SharedString::from(id))
         .cursor_pointer()
         .px_2()
-        .py_1()
+        .py_0p5()
         .rounded_md()
         .text_xs()
-        .bg(theme.selected)
-        .hover(move |s| s.bg(theme.border))
+        .flex_shrink_0()
+        .bg(theme.elevated)
+        .text_color(theme.muted)
+        .border_1()
+        .border_color(theme.border)
+        .hover(move |s| s.bg(theme.selected).text_color(theme.accent))
         .child("复制")
         .on_click(cx.listener(move |this, _, _, cx| {
             this.copy_blob(value.clone(), cx);
@@ -766,8 +893,8 @@ impl Render for InspectorWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
+            .gap_2()
+            .p_3()
             .child(
                 div()
                     .id("inspector-titlebar")
@@ -781,33 +908,24 @@ impl Render for InspectorWorkbench {
                     .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap_2()
                     .child(div().text_lg().child(title))
-                    .child(div().text_xs().text_color(theme.muted).child(subtitle))
+                    .child(status_chip("离线", StatusKind::Neutral))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted)
+                            .child(subtitle.trim_start_matches("离线 · ").to_owned()),
+                    )
                     .child(div().flex_1())
-                    .child(div().text_xs().text_color(theme.accent).child(self.notice)),
+                    .when(!self.notice.is_empty(), |view| {
+                        view.child(status_chip(self.notice, StatusKind::Accent))
+                    }),
             )
             .child(self.options_bar(cx))
             .when_some(self.error.as_ref(), |view, error| {
-                view.child(div().text_sm().text_color(theme.error).child(error.clone()))
+                view.child(banner(StatusKind::Error, error.clone()))
             })
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .flex()
-                    .gap_3()
-                    .child(
-                        div()
-                            .w(relative(0.42))
-                            .flex_shrink_0()
-                            .h_full()
-                            .flex()
-                            .flex_col()
-                            .child(self.input_area(cx)),
-                    )
-                    .child(self.result_area(cx)),
-            )
+            .child(self.body(cx))
     }
 }

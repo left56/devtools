@@ -250,12 +250,18 @@ impl Workspace {
                         div()
                             .id(SharedString::from(format!("tool-{id}")))
                             .cursor_pointer()
-                            .ml_4()
-                            .px_3()
-                            .py_2()
+                            .ml_3()
+                            .px_2()
+                            .py_1p5()
                             .rounded_md()
                             .bg(if id == self.selected {
                                 theme.selected
+                            } else {
+                                theme.sidebar
+                            })
+                            .border_1()
+                            .border_color(if id == self.selected {
+                                theme.accent_muted
                             } else {
                                 theme.sidebar
                             })
@@ -263,9 +269,15 @@ impl Workspace {
                             .child(
                                 div()
                                     .flex()
+                                    .items_center()
                                     .gap_2()
-                                    .child(div().text_color(theme.accent).child("{ }"))
-                                    .child(tool.name),
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.accent)
+                                            .child("{ }"),
+                                    )
+                                    .child(div().text_sm().child(tool.name)),
                             )
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.select_tool(id, window, cx)
@@ -282,8 +294,9 @@ impl Workspace {
                             .id(SharedString::from(format!("folder-{}", category.id())))
                             .cursor_pointer()
                             .px_2()
-                            .py_2()
-                            .text_sm()
+                            .py_1()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.muted)
                             .child(format!(
                                 "{}  {}",
@@ -333,9 +346,10 @@ impl Workspace {
                 div()
                     .mx_3()
                     .mb_2()
-                    .h(px(36.))
-                    .p_2()
-                    .bg(theme.panel)
+                    .h(px(32.))
+                    .px_2()
+                    .py_1()
+                    .bg(theme.elevated)
                     .border_1()
                     .border_color(theme.border)
                     .rounded_md()

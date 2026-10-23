@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具、**M3 检查器**（JWT / Regex / Cron / URL Parse / Diff）已落盘。M4 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-m3/`。
+状态：M0 骨架、M1 JSON 工作台、M2 纯函数工具、**M3 检查器**（JWT / Regex / Cron / URL Parse / Diff）已落盘。M4 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md)、`/workspace/devtools-linux-verify-m3/`（M3）与 `/workspace/devtools-linux-verify-ui/`（UI 打磨）。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -79,6 +79,7 @@ M0、M1、M2、M3 已实现。**当前验收主机是 Linux x86_64 + X11**（`ca
   - `case`：snake / camel / Pascal / kebab / CONSTANT。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
+- **UI 视觉打磨**：主题分层、主/次按钮、检查器布局（JWT 堆叠卡、Diff 上下结构、URL KV 行）；Linux Xvfb 截图见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-ui/`。
 - **通用变换工作台**（`TransformWorkbench`）：复用同一套编辑器与左右分栏，按工具切换动作与选项（字母表、算法、时区、进制、命名风格等）。切换变换类工具时保留输入、清除上次运行结果。不自动切工具。
 - macOS 透明原生标题栏融合暗色内容；侧边栏分类文件夹；`cmd-b` 收起；`cmd-k` 命令面板。
 - `suggest` 纯函数：JSON / JWT 结构 / 时间戳 / 标准 Base64。猜中也不自动切换；未注册工具不会出现在 `applicable_suggestions` 里。
@@ -87,7 +88,7 @@ M0、M1、M2、M3 已实现。**当前验收主机是 Linux x86_64 + X11**（`ca
 未实现：
 
 - 收藏、最近使用、建议条、单独的「读取剪贴板」按钮。
-- M3 检查器（JWT 解码 UI、正则、cron、URL 拆分、diff）。
+- ~~M3 检查器~~（已实现）。
 - 打包、签名、菜单栏、全局热键。
 - 语法高亮、自动折行、多光标和 redo。
 - macOS 真机点验与签名分发；Linux Wayland；Windows 壳（见下方「跨平台意图」）。
@@ -115,6 +116,8 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 ```
 
 2026-10-23：M2 在 Linux x86_64（rustc stable）上 `devtools-core` 3 + `devtools-tools` 45 个单测通过，两 crate clippy `-D warnings` 通过。壳需在 macOS 上 `cargo run -p devtools` 点验每个新工具的编码/解码/复制与错误展示。
+
+2026-10-23：UI 视觉打磨落盘（主题分层、主/次按钮、JWT 堆叠卡、Diff 上下结构、URL KV）；Xvfb 截图 `/workspace/devtools-linux-verify-ui/`。
 
 2026-10-23：M3 检查器（jwt / regex / cron / url-parse / diff）在 Linux x86_64 落盘并接 `InspectorWorkbench`。`devtools-tools` 单测扩到含 alg:none 与过期 exp；全工作区 `cargo test --workspace`（66 tools 层）与 clippy `-D warnings` 通过；Xvfb + lavapipe 交互截图见 `/workspace/devtools-linux-verify-m3/`。
 

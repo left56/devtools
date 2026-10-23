@@ -4,7 +4,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
-    ui::{button, pane, pane_header},
+    ui::{button, pane, pane_header, primary_button, status_chip, StatusKind},
 };
 use devtools_tools::json::{JsonDocument, JsonKind};
 use gpui::{prelude::FluentBuilder, *};
@@ -424,8 +424,8 @@ impl Render for JsonWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
+            .gap_2()
+            .p_3()
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if let Some((start, split)) = this.resizing {
                     if event.pressed_button == Some(MouseButton::Left) {
@@ -469,7 +469,9 @@ impl Render for JsonWorkbench {
                             .child("离线 · 严格解析 · 保留键顺序"),
                     )
                     .child(div().flex_1())
-                    .child(div().text_xs().text_color(theme.accent).child(self.notice)),
+                    .when(!self.notice.is_empty(), |view| {
+                        view.child(status_chip(self.notice, StatusKind::Accent))
+                    }),
             )
             .when(stale, |view| {
                 view.child(
@@ -517,7 +519,7 @@ impl Render for JsonWorkbench {
                             .child(
                                 pane_header()
                                     .child(div().text_sm().flex_1().child("原文"))
-                                    .child(button("prettify", "格式化").on_click(cx.listener(
+                                    .child(primary_button("prettify", "格式化").on_click(cx.listener(
                                         |this, _, window, cx| {
                                             this.execute(JsonAction::Prettify, window, cx)
                                         },

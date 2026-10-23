@@ -8,7 +8,7 @@ use crate::{
     actions::PrimaryRun,
     text_field::{Edited, TextField},
     theme::Theme,
-    ui::{button, chip, pane, pane_header},
+    ui::{button, chip, pane, pane_header, primary_button, status_chip, StatusKind},
 };
 use devtools_core::ids;
 use devtools_tools::{
@@ -318,7 +318,7 @@ impl TransformWorkbench {
             ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => {
                 header = header
                     .child(
-                        button("encode", "编码")
+                        primary_button("encode", "编码")
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -344,7 +344,7 @@ impl TransformWorkbench {
             }
             ids::HASH => {
                 header = header.child(
-                    button("hash", "计算")
+                    primary_button("hash", "计算")
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -359,7 +359,7 @@ impl TransformWorkbench {
             }
             ids::UUID => {
                 header = header.child(
-                    button("generate", "生成")
+                    primary_button("generate", "生成")
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -375,7 +375,7 @@ impl TransformWorkbench {
             ids::TIMESTAMP => {
                 header = header
                     .child(
-                        button("from-unix", "时间戳 → 时间")
+                        primary_button("from-unix", "时间戳 → 时间")
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -403,7 +403,7 @@ impl TransformWorkbench {
             }
             ids::NUMBER_BASE | ids::CASE => {
                 header = header.child(
-                    button("convert", "转换")
+                    primary_button("convert", "转换")
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -515,8 +515,8 @@ impl Render for TransformWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
+            .gap_2()
+            .p_3()
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if let Some((start, split)) = this.resizing {
                     if event.pressed_button == Some(MouseButton::Left) {
@@ -551,18 +551,26 @@ impl Render for TransformWorkbench {
                     .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap_2()
                     .child(div().text_lg().child(title))
-                    .child(div().text_xs().text_color(theme.muted).child(subtitle))
+                    .child(status_chip("离线", StatusKind::Neutral))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted)
+                            .child(subtitle.trim_start_matches("离线 · ").to_owned()),
+                    )
                     .child(div().flex_1())
-                    .child(div().text_xs().text_color(theme.accent).child(self.notice)),
+                    .when(!self.notice.is_empty(), |view| {
+                        view.child(status_chip(self.notice, StatusKind::Accent))
+                    }),
             )
             .child(self.options_bar(cx))
             .when(stale, |view| {
                 view.child(
                     div()
                         .text_xs()
-                        .text_color(rgb(0xe5c78b))
+                        .text_color(theme.warning)
                         .child("输入已更改 · 结果来自上次运行，请重新执行"),
                 )
             })

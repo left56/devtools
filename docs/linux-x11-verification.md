@@ -65,3 +65,20 @@ cargo run -p devtools
 | Diff 行级插入/删除高亮（无外部进程） | 通过（`final-diff.png`） |
 
 导航以 **Ctrl+K 命令面板** + **Ctrl+Enter 运行** 为主（与 M2 相同）；Regex/Diff 多输入框辅以鼠标点击切换字段。侧边栏「安全 / 网络」分类需下滚才看到 JWT、Hash、URL Parse。
+
+
+## UI 视觉打磨（同日稍后）
+
+截图在 `/workspace/devtools-linux-verify-ui/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+改动摘要：
+
+- 暗色主题分层：`bg` / `sidebar` / `panel` / `elevated`，独立 success / warning / error。
+- 主按钮（运行 / 格式化 / 编码）用 accent 实心；清空 / 复制为次级描边按钮；状态用小 chip。
+- 窗格标题高度约 36px，工作台内边距更紧。
+- **JWT**：Token 顶栏压缩；Header / Payload / Signature 改为内容高度堆叠卡片；警告为紧凑 banner。
+- **Diff**：原文/新文本并排在上（约 30% 高），全宽 Diff 结果在下；`+n` / `-m` 摘要 chip。
+- **URL Parse**：统一 KV 行（固定标签宽 + mono 值盒）；空的 username/password/fragment 省略；Query Params 独立分区。
+- 侧边栏选中行与搜索框跟新 chrome 对齐。
+
+点验：Ctrl+K 切工具 + Ctrl+Enter 运行（与 M3 相同）。macOS Metal 本轮未测。
