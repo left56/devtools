@@ -4,10 +4,11 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
-    ui::{button, pane, pane_header, primary_button, status_chip, StatusKind},
+    ui::{button, pane, pane_header, paste_button, status_chip, StatusKind},
 };
 use devtools_tools::json::{JsonDocument, JsonKind};
-use gpui::{prelude::FluentBuilder, *};
+use gpui::{prelude::FluentBuilder, Timer, *};
+use std::time::Duration;
 
 pub struct JsonWorkbench {
     pub input: Entity<TextField>,
@@ -24,6 +25,7 @@ pub struct JsonWorkbench {
     split: f32,
     pane_width: f32,
     resizing: Option<(Pixels, f32)>,
+    live_gen: u64,
 }
 
 impl JsonWorkbench {
@@ -31,12 +33,12 @@ impl JsonWorkbench {
         let input = cx.new(|cx| TextField::new(true, false, "在这里粘贴 JSON", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
-            cx.notify();
+            this.schedule_live_prettify(cx);
         })
         .detach();
         Self {
             input,
-            output: cx.new(|cx| TextField::new(true, true, "运行后在这里显示结果", cx)),
+            output: cx.new(|cx| TextField::new(true, true, "输入后自动格式化", cx)),
             path: cx.new(|cx| TextField::new(false, true, "", cx)),
             jq: cx.new(|cx| TextField::new(false, true, "", cx)),
             run: JsonRun::default(),
@@ -49,6 +51,7 @@ impl JsonWorkbench {
             split: 0.48,
             pane_width: 1000.,
             resizing: None,
+            live_gen: 0,
         }
     }
     pub fn focus_input(&self, window: &mut Window, cx: &App) {
@@ -62,6 +65,67 @@ impl JsonWorkbench {
         self.notice = "";
         cx.notify();
     }
+
+    fn paste_into_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.notice = "剪贴板为空";
+            cx.notify();
+            return;
+        }
+        self.input.update(cx, |field, cx| {
+            field.set_input(&text, cx);
+            field.focus(window);
+        });
+        self.notice = "已粘贴";
+        cx.notify();
+    }
+
+    fn schedule_live_prettify(&mut self, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
+        let generation = self.live_gen;
+        cx.spawn(async move |this, cx| {
+            Timer::after(Duration::from_millis(150)).await;
+            let _ = this.update(cx, |this, cx| {
+                if this.live_gen == generation {
+                    this.live_prettify(cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn live_prettify(&mut self, cx: &mut Context<Self>) {
+        let input = self.input.read(cx).buffer.text().to_owned();
+        if input.trim().is_empty() {
+            self.output.update(cx, |field, cx| field.set_output("", cx));
+            self.run = JsonRun::default();
+            self.last_input = Some(input);
+            self.tree = TreeState::default();
+            self.sync_inspector(cx);
+            cx.notify();
+            return;
+        }
+        // Live always prettifies; 压缩 stays an explicit button.
+        self.run = run_json(&input, JsonAction::Prettify);
+        self.last_input = Some(input);
+        let result = self.run.output.as_deref().unwrap_or("");
+        self.output
+            .update(cx, |field, cx| field.set_output(result, cx));
+        if let Some(doc) = &self.run.document {
+            self.tree.reset(doc);
+        } else {
+            self.tree = TreeState::default();
+        }
+        self.tree_scroll.set_offset(point(px(0.), px(0.)));
+        self.sync_inspector(cx);
+        self.text_view = false;
+        cx.notify();
+    }
+
     fn execute(&mut self, action: JsonAction, window: &mut Window, cx: &mut Context<Self>) {
         let input = self.input.read(cx).buffer.text().to_owned();
         self.run = run_json(&input, action);
@@ -85,6 +149,7 @@ impl JsonWorkbench {
         cx.notify();
     }
     fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
         self.input.update(cx, |field, cx| {
             field.clear(cx);
             field.focus(window);
@@ -420,10 +485,6 @@ impl JsonWorkbench {
 impl Render for JsonWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::dark();
-        let stale = self
-            .last_input
-            .as_ref()
-            .is_some_and(|last| last != self.input.read(cx).buffer.text());
         let entity = cx.entity().downgrade();
         div()
             .id("json-workbench")
@@ -481,14 +542,6 @@ impl Render for JsonWorkbench {
                         view.child(status_chip(self.notice, StatusKind::Accent))
                     }),
             )
-            .when(stale, |view| {
-                view.child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(0xe5c78b))
-                        .child("输入已更改 · 结果和路径来自上次运行，请重新格式化或压缩"),
-                )
-            })
             .when_some(self.run.error.as_ref(), |view, error| {
                 view.child(
                     div()
@@ -527,14 +580,23 @@ impl Render for JsonWorkbench {
                             .child(
                                 pane_header()
                                     .child(div().text_sm().flex_1().child("原文"))
-                                    .child(primary_button("prettify", "格式化").on_click(cx.listener(
-                                        |this, _, window, cx| {
-                                            this.execute(JsonAction::Prettify, window, cx)
-                                        },
-                                    )))
+                                    .child(
+                                        paste_button("json-paste").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into_input(window, cx);
+                                            }),
+                                        ),
+                                    )
                                     .child(button("minify", "压缩").on_click(cx.listener(
                                         |this, _, window, cx| {
                                             this.execute(JsonAction::Minify, window, cx)
+                                        },
+                                    )))
+                                    .child(button("prettify", "格式化").on_click(cx.listener(
+                                        |this, _, window, cx| {
+                                            this.execute(JsonAction::Prettify, window, cx)
                                         },
                                     )))
                                     .child(button("clear", "清空").on_click(

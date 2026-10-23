@@ -106,7 +106,7 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("escape", PaletteClose, Some("CommandPalette")),
         KeyBinding::new("ctrl-enter", PrimaryRun, None),
         KeyBinding::new("cmd-enter", PrimaryRun, None),
-        // One-shot clipboard read (never background watch). Linux: Ctrl+Shift+V.
+        // One-shot paste into current input (never background watch).
         KeyBinding::new("ctrl-shift-v", ReadClipboard, None),
         KeyBinding::new("cmd-shift-v", ReadClipboard, None),
         KeyBinding::new("ctrl-shift-i", InsertClipboard, None),

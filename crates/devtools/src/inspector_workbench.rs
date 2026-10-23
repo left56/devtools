@@ -6,8 +6,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, card, chip, kv_row, pane, pane_header, primary_button, status_chip,
-        StatusKind,
+        banner, button, card, chip, kv_row, pane, pane_header, paste_button,
+        status_chip, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -18,7 +18,8 @@ use devtools_tools::{
     regex_tool::{self, RegexResult},
     url_parse::{self, UrlParts},
 };
-use gpui::{prelude::FluentBuilder, *};
+use gpui::{prelude::FluentBuilder, Timer, *};
+use std::time::Duration;
 
 enum InspectorState {
     Idle,
@@ -49,6 +50,8 @@ pub struct InspectorWorkbench {
     error: Option<String>,
     notice: &'static str,
     result_scroll: ScrollHandle,
+    /// Debounce generation for regex live-run.
+    live_gen: u64,
 }
 
 impl InspectorWorkbench {
@@ -59,7 +62,7 @@ impl InspectorWorkbench {
         for field in [&primary, &secondary, &tertiary] {
             cx.subscribe(field, |this, _, _: &Edited, cx| {
                 this.notice = "";
-                cx.notify();
+                this.schedule_live(cx);
             })
             .detach();
         }
@@ -73,6 +76,7 @@ impl InspectorWorkbench {
             error: None,
             notice: "",
             result_scroll: ScrollHandle::new(),
+            live_gen: 0,
         }
     }
 
@@ -105,17 +109,86 @@ impl InspectorWorkbench {
             self.secondary.update(cx, |f, cx| {
                 f.set_placeholder(secondary_placeholder(tool_id), cx);
             });
+            self.schedule_live(cx);
         }
         self.focus_input(window, cx);
         cx.notify();
     }
 
+    fn paste_into(&mut self, target: PasteTarget, window: &mut Window, cx: &mut Context<Self>) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.notice = "剪贴板为空";
+            cx.notify();
+            return;
+        }
+        match target {
+            PasteTarget::Primary => self.primary.update(cx, |f, cx| {
+                f.set_input(&text, cx);
+                f.focus(window);
+            }),
+            PasteTarget::Secondary => self.secondary.update(cx, |f, cx| {
+                f.set_input(&text, cx);
+                f.focus(window);
+            }),
+            PasteTarget::Tertiary => self.tertiary.update(cx, |f, cx| {
+                f.set_input(&text, cx);
+                f.focus(window);
+            }),
+        }
+        self.notice = "已粘贴";
+        cx.notify();
+    }
+
+    fn schedule_live(&mut self, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
+        let generation = self.live_gen;
+        let delay = if self.tool_id == ids::REGEX {
+            Duration::from_millis(180)
+        } else {
+            Duration::from_millis(0)
+        };
+        cx.spawn(async move |this, cx| {
+            if !delay.is_zero() {
+                Timer::after(delay).await;
+            }
+            let _ = this.update(cx, |this, cx| {
+                if this.live_gen == generation {
+                    this.run_live(cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn run_live(&mut self, cx: &mut Context<Self>) {
+        self.run_inner(cx);
+    }
+
     fn run(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.run_inner(cx);
+    }
+
+    fn run_inner(&mut self, cx: &mut Context<Self>) {
         let primary = self.primary.read(cx).buffer.text().to_owned();
         let secondary = self.secondary.read(cx).buffer.text().to_owned();
         let tertiary = self.tertiary.read(cx).buffer.text().to_owned();
         self.error = None;
         self.state = InspectorState::Idle;
+
+        let empty = match self.tool_id {
+            ids::REGEX => secondary.trim().is_empty() && primary.trim().is_empty(),
+            ids::DIFF => primary.is_empty() && secondary.is_empty(),
+            _ => primary.trim().is_empty(),
+        };
+        if empty {
+            self.notice = "";
+            cx.notify();
+            return;
+        }
 
         let result = match self.tool_id {
             ids::JWT => jwt::decode(&primary)
@@ -159,7 +232,7 @@ impl InspectorWorkbench {
         match result {
             Ok(state) => {
                 self.state = state;
-                self.notice = "已更新结果";
+                self.notice = "";
             }
             Err(message) => {
                 self.error = Some(message);
@@ -170,6 +243,7 @@ impl InspectorWorkbench {
     }
 
     fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
         self.primary.update(cx, |f, cx| {
             f.clear(cx);
             f.focus(window);
@@ -207,17 +281,17 @@ impl InspectorWorkbench {
                 .child(div().text_xs().text_color(theme.muted).child("时区"))
                 .child(
                     chip("cron-local", "本机", matches!(self.cron_zone, CronZone::Local)).on_click(
-                        cx.listener(|this, _, window, cx| {
+                        cx.listener(|this, _, _, cx| {
                             this.cron_zone = CronZone::Local;
-                            this.run(window, cx);
+                            this.schedule_live(cx);
                         }),
                     ),
                 )
                 .child(
                     chip("cron-utc", "UTC", matches!(self.cron_zone, CronZone::Utc)).on_click(
-                        cx.listener(|this, _, window, cx| {
+                        cx.listener(|this, _, _, cx| {
                             this.cron_zone = CronZone::Utc;
-                            this.run(window, cx);
+                            this.schedule_live(cx);
                         }),
                     ),
                 );
@@ -227,28 +301,26 @@ impl InspectorWorkbench {
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("模式在下方第二框 · 可选替换在第三框 · Ctrl+Enter 运行"),
+                    .child("模式与替换在上方 · 被测文本在左 · 输入即匹配"),
+            );
+        } else {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child("输入即更新"),
             );
         }
         row
     }
 
-    fn run_clear_row(&self, cx: &mut Context<Self>) -> Div {
+    fn clear_row(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::dark();
         div()
             .flex()
             .items_center()
             .gap_2()
             .flex_shrink_0()
-            .child(
-                primary_button("inspect-run", "运行").on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                        cx.stop_propagation();
-                        this.run(window, cx);
-                    }),
-                ),
-            )
             .child(
                 button("inspect-clear", "清空").on_mouse_down(
                     MouseButton::Left,
@@ -262,7 +334,7 @@ impl InspectorWorkbench {
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("Ctrl+Enter 运行"),
+                    .child("输入即更新"),
             )
     }
 
@@ -280,11 +352,11 @@ impl InspectorWorkbench {
                 pane_header()
                     .child(div().text_sm().flex_1().child(primary_label(self.tool_id)))
                     .child(
-                        primary_button("inspect-run", "运行").on_mouse_down(
+                        paste_button("inspect-paste").on_mouse_down(
                             MouseButton::Left,
                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
                                 cx.stop_propagation();
-                                this.run(window, cx);
+                                this.paste_into(PasteTarget::Primary, window, cx);
                             }),
                         ),
                     )
@@ -301,49 +373,106 @@ impl InspectorWorkbench {
             .child(div().flex_1().min_h_0().p_2().child(self.primary.clone()))
     }
 
-    fn regex_input(&self, cx: &mut Context<Self>) -> Div {
+    /// Pattern + replace on top (always visible); haystack | results below.
+    fn regex_body(&self, cx: &mut Context<Self>) -> Div {
         div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
             .flex()
             .flex_col()
             .gap_2()
-            .w(relative(0.40))
-            .flex_shrink_0()
-            .h_full()
-            .min_h_0()
-            .child(self.run_clear_row(cx))
+            .child(self.clear_row(cx))
             .child(
-                pane()
-                    .h(px(64.))
+                div()
+                    .flex()
+                    .gap_2()
+                    .h(px(72.))
                     .flex_shrink_0()
-                    .child(pane_header().child(div().text_sm().child("模式（Rust regex）")))
-                    .child(div().flex_1().p_2().child(self.secondary.clone())),
+                    .child(
+                        pane()
+                            .flex_1()
+                            .child(
+                                pane_header()
+                                    .child(div().text_sm().flex_1().child("模式（Rust regex）"))
+                                    .child(
+                                        paste_button("regex-paste-pat").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into(PasteTarget::Secondary, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
+                            .child(div().flex_1().min_h_0().p_2().child(self.secondary.clone())),
+                    )
+                    .child(
+                        pane()
+                            .flex_1()
+                            .child(
+                                pane_header()
+                                    .child(div().text_sm().flex_1().child("替换（可选）"))
+                                    .child(
+                                        paste_button("regex-paste-repl").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into(PasteTarget::Tertiary, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
+                            .child(div().flex_1().min_h_0().p_2().child(self.tertiary.clone())),
+                    ),
             )
             .child(
-                pane()
+                div()
                     .flex_1()
-                    .child(pane_header().child(div().text_sm().flex_1().child("被测文本")))
-                    .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
-            )
-            .child(
-                pane()
-                    .h(px(56.))
-                    .flex_shrink_0()
-                    .child(pane_header().child(div().text_sm().child("替换（可选）")))
-                    .child(div().flex_1().p_2().child(self.tertiary.clone())),
+                    .min_h_0()
+                    .min_w_0()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        pane()
+                            .w(relative(0.42))
+                            .flex_shrink_0()
+                            .child(
+                                pane_header()
+                                    .child(div().text_sm().flex_1().child("被测文本"))
+                                    .child(
+                                        paste_button("regex-paste-hay").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into(PasteTarget::Primary, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .p_2()
+                                    .child(self.primary.clone()),
+                            ),
+                    )
+                    .child(self.result_area(cx)),
             )
     }
 
-    /// Diff: side-by-side inputs capped to ~38% height.
+    /// Diff: side-by-side inputs capped so the result pane stays usable.
     fn diff_inputs(&self, cx: &mut Context<Self>) -> Div {
         div()
             .flex()
             .flex_col()
             .gap_2()
-            .h(relative(0.30))
+            .h(relative(0.32))
             .flex_shrink_0()
-            .min_h(px(140.))
-            .max_h(px(260.))
-            .child(self.run_clear_row(cx))
+            .min_h(px(160.))
+            .max_h(px(280.))
+            .child(self.clear_row(cx))
             .child(
                 div()
                     .flex()
@@ -353,13 +482,37 @@ impl InspectorWorkbench {
                     .child(
                         pane()
                             .flex_1()
-                            .child(pane_header().child(div().text_sm().child("原文（旧）")))
+                            .child(
+                                pane_header()
+                                    .child(div().text_sm().flex_1().child("原文（旧）"))
+                                    .child(
+                                        paste_button("diff-paste-old").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into(PasteTarget::Primary, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
                             .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
                     )
                     .child(
                         pane()
                             .flex_1()
-                            .child(pane_header().child(div().text_sm().child("新文本")))
+                            .child(
+                                pane_header()
+                                    .child(div().text_sm().flex_1().child("新文本"))
+                                    .child(
+                                        paste_button("diff-paste-new").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into(PasteTarget::Secondary, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
                             .child(div().flex_1().min_h_0().p_2().child(self.secondary.clone())),
                     ),
             )
@@ -378,7 +531,7 @@ impl InspectorWorkbench {
                 .border_color(theme.border)
                 .bg(theme.panel)
                 .text_color(theme.muted)
-                .child("运行后在这里显示结构化结果")
+                .child("输入后在这里显示结构化结果")
                 .into_any_element(),
             InspectorState::Jwt(decoded) => self.jwt_result(decoded, cx),
             InspectorState::Regex(result) => self.regex_result(result, cx),
@@ -824,15 +977,7 @@ impl InspectorWorkbench {
                 .gap_2()
                 .child(self.diff_inputs(cx))
                 .child(self.result_area(cx)),
-            // Side-by-side still fits Regex (multi-field left, matches right).
-            ids::REGEX => div()
-                .flex_1()
-                .min_h_0()
-                .min_w_0()
-                .flex()
-                .gap_3()
-                .child(self.regex_input(cx))
-                .child(self.result_area(cx)),
+            ids::REGEX => self.regex_body(cx),
             _ => div()
                 .flex_1()
                 .child(div().text_color(Theme::dark().muted).child("未知检查器")),
@@ -859,6 +1004,13 @@ fn copy_chip(id: String, value: String, cx: &mut Context<InspectorWorkbench>) ->
         .on_click(cx.listener(move |this, _, _, cx| {
             this.copy_blob(value.clone(), cx);
         }))
+}
+
+#[derive(Clone, Copy)]
+enum PasteTarget {
+    Primary,
+    Secondary,
+    Tertiary,
 }
 
 fn primary_placeholder(tool_id: &str) -> &'static str {

@@ -6,7 +6,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, chip, kv_row, pane, pane_header, primary_button, status_chip, StatusKind,
+        banner, button, chip, kv_row, pane, pane_header, paste_button, primary_button, status_chip,
+        StatusKind,
     },
 };
 use devtools_core::ids;
@@ -93,6 +94,24 @@ impl NetworkWorkbench {
             field.focus(window);
         });
         self.notice = "";
+        cx.notify();
+    }
+
+    fn paste_into_primary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.notice = "剪贴板为空";
+            cx.notify();
+            return;
+        }
+        self.primary.update(cx, |field, cx| {
+            field.set_input(&text, cx);
+            field.focus(window);
+        });
+        self.notice = "已粘贴";
         cx.notify();
     }
 
@@ -394,6 +413,15 @@ impl Render for NetworkWorkbench {
                                             .child(if is_http { "URL" } else { "主机名" }),
                                     )
                                     .child(div().flex_1())
+                                    .child(
+                                        paste_button("network-paste").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into_primary(window, cx);
+                                            }),
+                                        ),
+                                    )
                                     .child(
                                         div()
                                             .text_xs()

@@ -202,3 +202,22 @@ pub fn kv_row(
                 }),
         )
 }
+
+/// Compact 「粘贴」 control for input pane headers (one-shot clipboard → field).
+pub fn paste_button(id: impl Into<SharedString>) -> Stateful<Div> {
+    let theme = Theme::dark();
+    div()
+        .id(id.into())
+        .cursor_pointer()
+        .px_2()
+        .py_0p5()
+        .rounded_md()
+        .text_xs()
+        .whitespace_nowrap()
+        .bg(theme.elevated)
+        .text_color(theme.accent)
+        .border_1()
+        .border_color(theme.accent_muted)
+        .hover(move |s| s.bg(theme.selected))
+        .child("粘贴")
+}

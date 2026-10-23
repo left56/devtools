@@ -8,7 +8,7 @@ use crate::{
     actions::PrimaryRun,
     text_field::{Edited, TextField},
     theme::Theme,
-    ui::{button, chip, pane, pane_header, primary_button, status_chip, StatusKind},
+    ui::{button, chip, pane, pane_header, paste_button, primary_button, status_chip, StatusKind},
 };
 use devtools_core::ids;
 use devtools_tools::{
@@ -36,6 +36,8 @@ enum TransformAction {
 
 pub struct TransformWorkbench {
     tool_id: &'static str,
+    /// For encode/decode and timestamp direction; ignored by one-shot tools.
+    live_mode: TransformAction,
     input: Entity<TextField>,
     output: Entity<TextField>,
     base64_url_safe: bool,
@@ -61,13 +63,14 @@ impl TransformWorkbench {
         let input = cx.new(|cx| TextField::new(true, false, "在这里粘贴输入", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
-            cx.notify();
+            this.live_refresh(cx);
         })
         .detach();
         Self {
             tool_id: ids::BASE64,
+            live_mode: TransformAction::Encode,
             input,
-            output: cx.new(|cx| TextField::new(true, true, "运行后在这里显示结果", cx)),
+            output: cx.new(|cx| TextField::new(true, true, "输入后自动显示结果", cx)),
             base64_url_safe: false,
             hash_algo: Algorithm::Sha256,
             uuid_version: UuidVersion::V4,
@@ -102,8 +105,9 @@ impl TransformWorkbench {
     pub fn set_tool(&mut self, tool_id: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         if self.tool_id != tool_id {
             self.tool_id = tool_id;
+            self.live_mode = default_live_mode(tool_id);
             // Keep the typed text when switching among transform tools; clear
-            // only the last run so the stale banner does not lie about another tool.
+            // only the last run so results recompute for the new tool.
             self.output_text = None;
             self.error = None;
             self.error_offset = None;
@@ -114,9 +118,79 @@ impl TransformWorkbench {
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
             });
+            self.live_refresh(cx);
         }
         self.focus_input(window, cx);
         cx.notify();
+    }
+
+    fn paste_into_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.notice = "剪贴板为空";
+            cx.notify();
+            return;
+        }
+        self.input.update(cx, |field, cx| {
+            field.set_input(&text, cx);
+            field.focus(window);
+        });
+        self.notice = "已粘贴";
+        // Edited subscription triggers live_refresh.
+        cx.notify();
+    }
+
+    /// Recompute result from current input (no network). Skips UUID generate.
+    fn live_refresh(&mut self, cx: &mut Context<Self>) {
+        if self.tool_id == ids::UUID {
+            cx.notify();
+            return;
+        }
+        let input = self.input.read(cx).buffer.text().to_owned();
+        if input.is_empty() {
+            self.output_text = None;
+            self.error = None;
+            self.error_offset = None;
+            self.last_input = Some(input);
+            self.output
+                .update(cx, |field, cx| field.set_output("", cx));
+            cx.notify();
+            return;
+        }
+        let action = self.live_action();
+        let result = run_transform(self.tool_id, &input, action, self);
+        self.last_input = Some(input);
+        match result {
+            Ok(output) => {
+                self.output_text = Some(output.clone());
+                self.error = None;
+                self.error_offset = None;
+                self.output
+                    .update(cx, |field, cx| field.set_output(&output, cx));
+            }
+            Err((message, offset)) => {
+                self.output_text = None;
+                self.error = Some(message);
+                self.error_offset = offset;
+                self.output
+                    .update(cx, |field, cx| field.set_output("", cx));
+            }
+        }
+        cx.notify();
+    }
+
+    fn live_action(&self) -> TransformAction {
+        match self.tool_id {
+            ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => self.live_mode,
+            ids::HASH => TransformAction::Hash,
+            ids::TIMESTAMP => self.live_mode,
+            ids::NUMBER_BASE | ids::CASE => TransformAction::Convert,
+            ids::UUID => TransformAction::Generate,
+            _ => TransformAction::Encode,
+        }
     }
 
     fn execute(&mut self, action: TransformAction, window: &mut Window, cx: &mut Context<Self>) {
@@ -187,15 +261,69 @@ impl TransformWorkbench {
                     .child(chip("b64-std", "标准", !self.base64_url_safe).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.base64_url_safe = false;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
                     ))
                     .child(chip("b64-url", "URL-safe", self.base64_url_safe).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.base64_url_safe = true;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
-                    ));
+                    ))
+                    .child(div().text_xs().text_color(theme.muted).child("方向"))
+                    .child(
+                        chip(
+                            "b64-enc",
+                            "编码",
+                            matches!(self.live_mode, TransformAction::Encode),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::Encode;
+                            this.live_refresh(cx);
+                        })),
+                    )
+                    .child(
+                        chip(
+                            "b64-dec",
+                            "解码",
+                            matches!(self.live_mode, TransformAction::Decode),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::Decode;
+                            this.live_refresh(cx);
+                        })),
+                    );
+            }
+            ids::URL_ENCODE | ids::HTML_ESCAPE => {
+                let prefix = if self.tool_id == ids::URL_ENCODE {
+                    "url"
+                } else {
+                    "html"
+                };
+                row = row
+                    .child(div().text_xs().text_color(theme.muted).child("方向"))
+                    .child(
+                        chip(
+                            format!("{prefix}-enc"),
+                            "编码",
+                            matches!(self.live_mode, TransformAction::Encode),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::Encode;
+                            this.live_refresh(cx);
+                        })),
+                    )
+                    .child(
+                        chip(
+                            format!("{prefix}-dec"),
+                            "解码",
+                            matches!(self.live_mode, TransformAction::Decode),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::Decode;
+                            this.live_refresh(cx);
+                        })),
+                    );
             }
             ids::HASH => {
                 row = row.child(div().text_xs().text_color(theme.muted).child("算法"));
@@ -215,7 +343,7 @@ impl TransformWorkbench {
                     row = row.child(chip(id, label, active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.hash_algo = algo;
-                            cx.notify();
+                            this.live_refresh(cx);
                         },
                     )));
                 }
@@ -242,28 +370,51 @@ impl TransformWorkbench {
                     .child(chip("ts-sec", "秒", matches!(self.ts_unit, Unit::Seconds)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_unit = Unit::Seconds;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
                     ))
                     .child(chip("ts-ms", "毫秒", matches!(self.ts_unit, Unit::Milliseconds)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_unit = Unit::Milliseconds;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
                     ))
                     .child(div().text_xs().text_color(theme.muted).child("时区"))
                     .child(chip("ts-local", "本机", matches!(self.ts_zone, Zone::Local)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_zone = Zone::Local;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
                     ))
                     .child(chip("ts-utc", "UTC", matches!(self.ts_zone, Zone::Utc)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_zone = Zone::Utc;
-                            cx.notify();
+                            this.live_refresh(cx);
                         }),
-                    ));
+                    ))
+                    .child(div().text_xs().text_color(theme.muted).child("方向"))
+                    .child(
+                        chip(
+                            "ts-from",
+                            "时间戳 → 时间",
+                            matches!(self.live_mode, TransformAction::FromUnix),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::FromUnix;
+                            this.live_refresh(cx);
+                        })),
+                    )
+                    .child(
+                        chip(
+                            "ts-to",
+                            "时间 → 时间戳",
+                            matches!(self.live_mode, TransformAction::ToUnix),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.live_mode = TransformAction::ToUnix;
+                            this.live_refresh(cx);
+                        })),
+                    );
             }
             ids::NUMBER_BASE => {
                 row = row.child(div().text_xs().text_color(theme.muted).child("从"));
@@ -273,7 +424,7 @@ impl TransformWorkbench {
                     row = row.child(chip(id, base.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.num_from = base;
-                            cx.notify();
+                            this.live_refresh(cx);
                         },
                     )));
                 }
@@ -284,7 +435,7 @@ impl TransformWorkbench {
                     row = row.child(chip(id, base.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.num_to = base;
-                            cx.notify();
+                            this.live_refresh(cx);
                         },
                     )));
                 }
@@ -297,134 +448,59 @@ impl TransformWorkbench {
                     row = row.child(chip(id, style.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.case_style = style;
-                            cx.notify();
+                            this.live_refresh(cx);
                         },
                     )));
                 }
             }
             _ => {}
         }
-        row
+        row.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted)
+                .child(if self.tool_id == ids::UUID {
+                    "点击生成"
+                } else {
+                    "输入即更新"
+                }),
+        )
     }
 
     fn run_primary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let action = match self.tool_id {
-            ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => TransformAction::Encode,
-            ids::HASH => TransformAction::Hash,
-            ids::UUID => TransformAction::Generate,
-            ids::TIMESTAMP => TransformAction::FromUnix,
-            ids::NUMBER_BASE | ids::CASE => TransformAction::Convert,
-            _ => return,
-        };
-        self.execute(action, window, cx);
+        if self.tool_id == ids::UUID {
+            self.execute(TransformAction::Generate, window, cx);
+            return;
+        }
+        self.live_refresh(cx);
     }
 
     fn input_header(&self, cx: &mut Context<Self>) -> Div {
-        // Buttons are direct children of pane_header (same as JSON workbench).
-        let mut header = pane_header().child(div().text_sm().flex_1().child("原文"));
-        match self.tool_id {
-            ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => {
-                header = header
-                    .child(
-                        primary_button("encode", "编码")
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.execute(TransformAction::Encode, window, cx);
-                                }),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.execute(TransformAction::Encode, window, cx)
-                            })),
+        let mut header = pane_header()
+            .child(div().text_sm().flex_1().child("原文"))
+            .child(
+                paste_button("transform-paste").on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        this.paste_into_input(window, cx);
+                    }),
+                ),
+            );
+        if self.tool_id == ids::UUID {
+            header = header.child(
+                primary_button("generate", "生成")
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.execute(TransformAction::Generate, window, cx);
+                        }),
                     )
-                    .child(
-                        button("decode", "解码").on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.execute(TransformAction::Decode, window, cx);
-                            }),
-                        ).on_click(cx.listener(|this, _, window, cx| {
-                            this.execute(TransformAction::Decode, window, cx)
-                        })),
-                    );
-            }
-            ids::HASH => {
-                header = header.child(
-                    primary_button("hash", "计算")
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.execute(TransformAction::Hash, window, cx);
-                            }),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.execute(TransformAction::Hash, window, cx)
-                        })),
-                );
-            }
-            ids::UUID => {
-                header = header.child(
-                    primary_button("generate", "生成")
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.execute(TransformAction::Generate, window, cx);
-                            }),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.execute(TransformAction::Generate, window, cx)
-                        })),
-                );
-            }
-            ids::TIMESTAMP => {
-                header = header
-                    .child(
-                        primary_button("from-unix", "时间戳 → 时间")
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.execute(TransformAction::FromUnix, window, cx);
-                                }),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.execute(TransformAction::FromUnix, window, cx)
-                            })),
-                    )
-                    .child(
-                        button("to-unix", "时间 → 时间戳")
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.execute(TransformAction::ToUnix, window, cx);
-                                }),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.execute(TransformAction::ToUnix, window, cx)
-                            })),
-                    );
-            }
-            ids::NUMBER_BASE | ids::CASE => {
-                header = header.child(
-                    primary_button("convert", "转换")
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.execute(TransformAction::Convert, window, cx);
-                            }),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.execute(TransformAction::Convert, window, cx)
-                        })),
-                );
-            }
-            _ => {}
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.execute(TransformAction::Generate, window, cx)
+                    })),
+            );
         }
         header.child(button("clear", "清空").on_click(
             cx.listener(|this, _, window, cx| this.clear(window, cx)),
@@ -434,15 +510,25 @@ impl TransformWorkbench {
 
 fn placeholder_for(tool_id: &str) -> &'static str {
     match tool_id {
-        ids::BASE64 => "粘贴文本以编码，或粘贴 Base64 以解码",
-        ids::URL_ENCODE => "粘贴要编码的组件，或粘贴百分号编码以解码",
-        ids::HTML_ESCAPE => "粘贴 HTML 片段以转义或反转义",
-        ids::HASH => "粘贴要计算摘要的文本",
-        ids::UUID => "点击生成；也可粘贴 UUID 查看版本（生成不依赖输入）",
+        ids::BASE64 => "粘贴文本或 Base64 · 上方切换编码/解码",
+        ids::URL_ENCODE => "粘贴组件或百分号编码 · 上方切换方向",
+        ids::HTML_ESCAPE => "粘贴 HTML · 上方切换转义/反转义",
+        ids::HASH => "粘贴要计算摘要的文本 · 输入即更新",
+        ids::UUID => "点击「生成」；输入不参与生成",
         ids::TIMESTAMP => "粘贴 Unix 时间戳或 YYYY-MM-DD HH:MM:SS",
-        ids::NUMBER_BASE => "粘贴整数，例如 255 或 ff",
-        ids::CASE => "粘贴标识符，例如 hello_world",
+        ids::NUMBER_BASE => "粘贴整数，例如 255 或 ff · 输入即更新",
+        ids::CASE => "粘贴标识符，例如 hello_world · 输入即更新",
         _ => "在这里粘贴输入",
+    }
+}
+
+fn default_live_mode(tool_id: &str) -> TransformAction {
+    match tool_id {
+        ids::TIMESTAMP => TransformAction::FromUnix,
+        ids::HASH => TransformAction::Hash,
+        ids::NUMBER_BASE | ids::CASE => TransformAction::Convert,
+        ids::UUID => TransformAction::Generate,
+        _ => TransformAction::Encode,
     }
 }
 
@@ -507,10 +593,6 @@ fn run_transform(
 impl Render for TransformWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::dark();
-        let stale = self
-            .last_input
-            .as_ref()
-            .is_some_and(|last| last != self.input.read(cx).buffer.text());
         let (title, subtitle) = self.title();
         let entity = cx.entity().downgrade();
         div()
@@ -574,14 +656,6 @@ impl Render for TransformWorkbench {
                     }),
             )
             .child(self.options_bar(cx))
-            .when(stale, |view| {
-                view.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.warning)
-                        .child("输入已更改 · 结果来自上次运行，请重新执行"),
-                )
-            })
             .when_some(self.error.as_ref(), |view, error| {
                 view.child(div().text_sm().text_color(theme.error).child(error.clone()))
             })

@@ -7,7 +7,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     transform_workbench::TransformWorkbench,
-    ui::{button, chip, primary_button, status_chip, StatusKind},
+    ui::{chip, status_chip, StatusKind},
 };
 use devtools_core::{Category, Detection, Registry, ToolMeta};
 use gpui::{prelude::FluentBuilder, *};
@@ -184,25 +184,10 @@ impl Workspace {
         cx.notify();
     }
 
-    fn read_clipboard(&mut self, _: &ReadClipboard, _window: &mut Window, cx: &mut Context<Self>) {
-        let text = cx
-            .read_from_clipboard()
-            .and_then(|item| item.text())
-            .unwrap_or_default();
-        if text.is_empty() {
-            self.last_clipboard = None;
-            self.suggestions.clear();
-            self.chrome_notice = "剪贴板为空";
-        } else {
-            self.suggestions = devtools_tools::applicable_suggestions(&self.registry, &text);
-            self.last_clipboard = Some(text);
-            self.chrome_notice = if self.suggestions.is_empty() {
-                "已读取剪贴板 · 无匹配建议（可手动插入）"
-            } else {
-                "已读取剪贴板 · 点击建议仅切换工具，不改动输入"
-            };
-        }
-        cx.notify();
+    /// One-shot clipboard → current tool input + optional suggestion chips.
+    /// Never watches the clipboard in the background (decision 4).
+    fn read_clipboard(&mut self, _: &ReadClipboard, window: &mut Window, cx: &mut Context<Self>) {
+        self.paste_clipboard_into_current(window, cx);
     }
 
     fn insert_clipboard(
@@ -211,13 +196,34 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(text) = self.last_clipboard.clone() else {
-            self.chrome_notice = "请先读取剪贴板";
+        // Same as read: the old two-step strip is gone; shortcut still pastes once.
+        self.paste_clipboard_into_current(window, cx);
+    }
+
+    fn paste_clipboard_into_current(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.last_clipboard = None;
+            self.suggestions.clear();
+            self.chrome_notice = "剪贴板为空";
             cx.notify();
             return;
-        };
+        }
+        self.suggestions = devtools_tools::applicable_suggestions(&self.registry, &text);
+        self.last_clipboard = Some(text.clone());
         self.insert_text_into_current(&text, window, cx);
-        self.chrome_notice = "已插入剪贴板到输入";
+        self.chrome_notice = if self.suggestions.is_empty() {
+            "已粘贴"
+        } else {
+            "已粘贴 · 点击建议仅切换工具"
+        };
         cx.notify();
     }
 
@@ -240,7 +246,7 @@ impl Workspace {
     fn apply_suggestion(&mut self, tool_id: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         // Click suggestion → switch tool only. Keep editor contents (decision 5 / M4).
         self.select_tool(tool_id, window, cx);
-        self.chrome_notice = "已切换工具 · 输入未改动；需要时可插入剪贴板";
+        self.chrome_notice = "已切换工具 · 输入未改动";
     }
 
     fn toggle_sidebar(&mut self, _: &ToggleSidebar, window: &mut Window, cx: &mut Context<Self>) {
@@ -576,9 +582,12 @@ impl Workspace {
             .into_any_element()
     }
 
-    fn efficiency_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+    /// Compact chips only — no clipboard/favorite strip.
+    fn suggestion_strip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.suggestions.is_empty() && self.chrome_notice.is_empty() {
+            return None;
+        }
         let theme = Theme::dark();
-        let has_clip = self.last_clipboard.as_ref().is_some_and(|t| !t.is_empty());
         let mut suggestions_row = div().flex().flex_wrap().items_center().gap_1();
         for detection in &self.suggestions {
             let id = detection.tool_id;
@@ -603,86 +612,38 @@ impl Workspace {
                 })),
             );
         }
-
-        div()
-            .id("efficiency-bar")
+        let mut row = div()
+            .id("suggestion-strip")
             .flex_shrink_0()
             .px_3()
-            .py_2()
+            .py_1p5()
             .border_b_1()
             .border_color(theme.border)
-            .bg(theme.elevated)
+            .bg(theme.bg)
             .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        primary_button("read-clipboard", "读取剪贴板")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.read_clipboard(&ReadClipboard, window, cx)
-                            })),
-                    )
-                    .child(
-                        button("insert-clipboard", "插入到输入")
-                            .when(!has_clip, |s| s.opacity(0.45))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.insert_clipboard(&InsertClipboard, window, cx)
-                            })),
-                    )
-                    .child(
-                        button(
-                            "toggle-fav",
-                            if self.prefs.is_favorite(self.selected) {
-                                "取消收藏"
-                            } else {
-                                "收藏此工具"
-                            },
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.toggle_favorite_action(&ToggleFavorite, window, cx)
-                        })),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child(clipboard_hint()),
-                    ),
-            )
-            .when(!self.suggestions.is_empty(), |view| {
-                view.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.muted)
-                                .child("建议"),
-                        )
-                        .child(suggestions_row)
-                        .child(status_chip(
-                            "点击只切换工具",
-                            StatusKind::Neutral,
-                        )),
-                )
-            })
-            .when(!self.chrome_notice.is_empty(), |view| {
-                view.child(
+            .flex_wrap()
+            .items_center()
+            .gap_2();
+        if !self.suggestions.is_empty() {
+            row = row
+                .child(
                     div()
                         .text_xs()
                         .text_color(theme.muted)
-                        .child(self.chrome_notice),
+                        .child("建议"),
                 )
-            })
+                .child(suggestions_row)
+                .child(status_chip("点击只切换工具", StatusKind::Neutral));
+        }
+        if !self.chrome_notice.is_empty() {
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child(self.chrome_notice),
+            );
+        }
+        Some(row.into_any_element())
     }
 
     fn palette(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -844,7 +805,7 @@ impl Render for Workspace {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .child(self.efficiency_bar(cx))
+                    .children(self.suggestion_strip(cx))
                     .child(
                         div()
                             .flex_1()
@@ -896,11 +857,11 @@ fn sidebar_title_pl() -> f32 {
 fn palette_hint() -> &'static str {
     #[cfg(target_os = "macos")]
     {
-        "⌘K 搜索 · ⌘⇧V 读取剪贴板"
+        "⌘K 搜索 · ★ 收藏 · ⌘⇧V 粘贴到输入"
     }
     #[cfg(not(target_os = "macos"))]
     {
-        "Ctrl+K 搜索 · Ctrl+Shift+V 读取剪贴板"
+        "Ctrl+K 搜索 · ★ 收藏 · Ctrl+Shift+V 粘贴到输入"
     }
 }
 
@@ -912,16 +873,5 @@ fn palette_hint_short() -> &'static str {
     #[cfg(not(target_os = "macos"))]
     {
         "Ctrl+K"
-    }
-}
-
-fn clipboard_hint() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        "⌘⇧V 读一次 · ⌘⇧I 插入 · 无后台监听"
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        "Ctrl+Shift+V 读一次 · Ctrl+Shift+I 插入 · 无后台监听"
     }
 }

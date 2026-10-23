@@ -34,8 +34,9 @@ M2 变换、M3 检查器、M4 效率、M5 第一批联网工具已接上。侧�
 - 自研多行输入：选择、复制/剪切/粘贴、滚动、等宽字体、最多 128 步线性撤销（无 redo）。
 - macOS 原生三色按钮与暗色内容区融合；侧边栏按「分类 → 工具」折叠；原文与结果左右分栏。
 - 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；`cmd-k` 命令面板。
-- 系统剪贴板：**无后台监听**。`Ctrl+Shift+V`（macOS `Cmd+Shift+V`）读一次 → 建议条；`Ctrl+Shift+I` 才插入当前输入。建议点击只切换工具。
-- 最近使用 / 收藏：本地 `prefs.json`（只存工具 id 与时间戳）。Linux：`$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS：`~/Library/Application Support/Devtools`。
+- 系统剪贴板：**无后台监听**。输入框标题「粘贴」或 `Ctrl+Shift+V`（macOS `Cmd+Shift+V`）读一次并写入该输入；有匹配时出现紧凑建议芯片（点击只切换工具）。
+- 轻量工具（变换 / 检查器 / JSON 格式化）**输入即更新**；UUID「生成」与 HTTP/DNS「运行」仍为显式按钮。
+- 最近使用 / 收藏：侧边栏 ★ 与 `Ctrl+Shift+F`；本地 `prefs.json`（只存工具 id 与时间戳）。Linux：`$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS：`~/Library/Application Support/Devtools`。
 - 联网工具打开默认离线；运行前横幅标明「会访问网络」。
 
 `cargo test --workspace`（tools 层 74 个单测）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2–M5 壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)、`/workspace/devtools-linux-verify-m4/`、`/workspace/devtools-linux-verify-m5/`）。macOS 真机点验仍待补。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
@@ -87,9 +88,9 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 cargo run -p devtools --offline --config 'source.crates-io.registry="sparse+https://rsproxy.cn/index/"'
 ```
 
-关闭窗口后进程退出。`cmd-w` 关闭窗口，`cmd-m` 最小化，`ctrl-cmd-f` 进入/退出全屏，`cmd-b` 收起或展开侧边栏，`cmd-k` 打开或关闭命令面板。面板用上下键选择、回车打开、Esc 返回原焦点；回车只在多行编辑器中插入换行。`cmd-z` 撤销编辑，`cmd-a/c/x/v` 全选、复制、剪切、粘贴。结果区只读，可选择复制。变换类工具可用 **Ctrl+Enter**（macOS 上 Cmd+Enter）执行主操作。
+关闭窗口后进程退出。`cmd-w` 关闭窗口，`cmd-m` 最小化，`ctrl-cmd-f` 进入/退出全屏，`cmd-b` 收起或展开侧边栏，`cmd-k` 打开或关闭命令面板。面板用上下键选择、回车打开、Esc 返回原焦点；回车只在多行编辑器中插入换行。`cmd-z` 撤销编辑，`cmd-a/c/x/v` 全选、复制、剪切、粘贴。结果区只读，可选择复制。轻量工具输入即更新；联网工具与 UUID 生成可用 **Ctrl+Enter**（macOS 上 Cmd+Enter）执行。
 
-JSON：格式化后默认展示树，压缩后展示文本；「复制结果」始终复制最近一次运行生成的完整字符串。变换类工具（Base64 等）同样左右分栏，选项在标题下，动作在原文侧。
+JSON：输入时自动格式化并展示树；「压缩」「格式化」仍可手动点。变换类工具左右分栏，方向/选项在标题下芯片切换。
 
 ## 布局
 

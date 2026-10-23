@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0–M3、**M4 效率**（剪贴板一次读取、建议条、最近使用/收藏）、**M5 第一批联网工具**（HTTP Request、DNS Lookup）已落盘。M6 分发仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；JSON 检查器见 [检查器验证记录](json-inspector-validation.md)；Linux 壳点验见 [linux-x11-verification.md](linux-x11-verification.md)、`/workspace/devtools-linux-verify-m3/`（M3）、`/workspace/devtools-linux-verify-ui/`（UI）、`/workspace/devtools-linux-verify-m4/`（M4）、`/workspace/devtools-linux-verify-m5/`（M5）。
+状态：M0–M5 第一批已落盘；**UX：轻量工具实时运行、顶栏剪贴板条移除、输入框「粘贴」**。M6 分发仍是计划。验证见 [m1-validation.md](m1-validation.md)、[json-inspector-validation.md](json-inspector-validation.md)、[linux-x11-verification.md](linux-x11-verification.md)，以及 `/workspace/devtools-linux-verify-ux2/`（本轮 UX）。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -80,8 +80,8 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
 - **UI 视觉打磨**：主题分层、主/次按钮、检查器布局（JWT 堆叠卡、Diff 上下结构、URL KV 行）；Linux Xvfb 截图见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-ui/`。
-- **通用变换工作台**（`TransformWorkbench`）：复用同一套编辑器与左右分栏，按工具切换动作与选项（字母表、算法、时区、进制、命名风格等）。切换变换类工具时保留输入、清除上次运行结果。不自动切工具。
-- **M4 效率**：顶栏「读取剪贴板」（Linux `Ctrl+Shift+V` / macOS `Cmd+Shift+V`，只读一次）→ 建议条（`applicable_suggestions`，点击只切换工具）+「插入到输入」（`Ctrl+Shift+I`）；最近使用/收藏写入本地 JSON（只存工具 id 与时间戳）。命令面板空查询时置顶最近使用。`Ctrl+Shift+F` 切换收藏。
+- **通用变换工作台**（`TransformWorkbench`）：左右分栏；**轻量变换实时运行**（编码/解码用方向芯片；UUID「生成」仍为按钮）。切换变换类工具时保留输入并按新工具重算。不自动切工具。
+- **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
 - **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
 - **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。
 - macOS 透明原生标题栏融合暗色内容；侧边栏分类文件夹；`cmd-b` 收起；`cmd-k` 命令面板。
@@ -145,13 +145,13 @@ devtools-core       分类、ToolMeta、注册表、搜索、稳定 id
 - 交互工具的状态放在壳里。例如正则的高亮、HTTP 的请求编辑、JSON 树。它们调用 tools crate 里的纯函数，不把 GPUI 类型传进 tools。
 - 纯文本变换不必上 trait。一个工具一个模块，导出 `meta()` 和具体函数即可。等出现第三种相同形状再抽 trait，不提前抽。
 
-数据流（M1–M4 已实现输入、运行、复制、显式读取与建议条）：
+数据流（M1–M5 + UX）：
 
-1. 用户在编辑器里输入，或按一次「读取剪贴板」。
-2. 壳把 `&str` 交给对应函数。
+1. 用户在编辑器里输入，或点输入框「粘贴」/ `Ctrl+Shift+V`（读一次剪贴板写入）。
+2. 轻量工具：壳在输入变化时把 `&str` 交给对应函数（Regex 短防抖）；联网工具等用户点「运行」。
 3. 函数返回结果或带位置的错误。
 4. 壳展示结果。复制也由壳做。
-5. 猜测走 `suggest`。壳只显示「可以打开某某工具」。不替换当前编辑器的内容，不切换当前工具，除非用户确认。
+5. 猜测走 `suggest`。壳只显示建议芯片。不自动切换工具，除非用户确认。
 
 进程内日志以后如果要加，默认不得记录工具输入和输出。当前没有日志依赖。
 
@@ -294,12 +294,12 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 验收：每个工具有不启动窗口的测试（含 JWT `alg: none` 与过期 `exp`）。Linux x86_64 上 `cargo test --workspace` + clippy `-D warnings` + Xvfb/lavapipe 交互点验通过。
 
-### M4 效率（已完成）
+### M4 效率（已完成；UX 收紧）
 
-- 「读取剪贴板」按钮 + Linux `Ctrl+Shift+V` / macOS `Cmd+Shift+V`：只读一次，喂给建议条；「插入到输入」（`Ctrl+Shift+I`）才写入当前工具输入。不自动替换。
-- 建议条使用 `applicable_suggestions`。点击只切换工具；默认保留编辑器内容。
+- 输入框「粘贴」+ `Ctrl+Shift+V` / `Cmd+Shift+V`：读一次并写入当前输入（无后台监听）。建议芯片行仅在有检测时出现；点击只切换工具。
+- **实时运行**：变换类（除 UUID 生成）与检查器（JWT / Regex 防抖 / Cron / URL / Diff）及 JSON 格式化在输入时更新；HTTP / DNS 仍显式「运行」。
 - 最近使用和收藏：`prefs.json`，只存工具 id、`used_at`、favorites。路径：Linux `$XDG_DATA_HOME/devtools`（或 `~/.local/share/devtools`）；macOS `~/Library/Application Support/Devtools`。
-- 命令面板空查询时置顶最近使用；侧边栏「★ 收藏」分区；`Ctrl+Shift+F` 切换当前工具收藏。
+- 命令面板空查询时置顶最近使用；侧边栏「★ 收藏」；`Ctrl+Shift+F` 切换收藏。
 
 不做：状态栏图标、登录项、后台监听、全局热键产品化。
 

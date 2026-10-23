@@ -110,3 +110,8 @@ cargo run -p devtools
 | prefs 仍只有工具 id（无 URL / 响应体） | 通过 |
 
 依赖：`ureq`（HTTP）、`dns-lookup`（系统 A/AAAA）。证书解码 / CSV / SQL 未做。macOS Metal 本轮未测。
+
+
+## UX2（2026-10-23）
+
+去掉顶栏剪贴板条；输入框「粘贴」；轻量工具实时运行。截图：`/workspace/devtools-linux-verify-ux2/`（Regex 模式+替换置顶可见、Base64 输入即编码、Ctrl+Shift+V 粘贴、HTTP 仍有「运行」+ 联网横幅）。
