@@ -40,7 +40,7 @@ pub struct BatchWorkbench {
 
 impl BatchWorkbench {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| TextField::new(true, false, "在这里粘贴输入", cx));
+        let input = cx.new(|cx| TextField::new(false, false, "在这里粘贴输入", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
             if this.tool_id == ids::BIP39 {
@@ -92,6 +92,10 @@ impl BatchWorkbench {
             self.quantity = 1;
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
+                field.set_multiline(
+                    !devtools_tools::is_batch_single_line_tool(tool_id),
+                    cx,
+                );
                 if devtools_tools::is_batch_generate_tool(tool_id) {
                     field.clear(cx);
                 }
@@ -775,18 +779,34 @@ impl Render for BatchWorkbench {
             .when_some(self.error.as_ref(), |view, error| {
                 view.child(crate::ui::banner(theme, StatusKind::Error, error.clone()))
             })
+            .when(self.tool_id == ids::BIP39, |view| {
+                view.child(
+                    pane(theme)
+                        .h(px(120.))
+                        .flex_shrink_0()
+                        .child(self.input_header(cx))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h_0()
+                                .min_w_0()
+                                .px_3()
+                                .pb_2()
+                                .child(self.input.clone()),
+                        ),
+                )
+            })
             .when(
-                self.tool_id == ids::BIP39,
+                !devtools_tools::is_batch_generate_tool(self.tool_id)
+                    && devtools_tools::is_batch_single_line_tool(self.tool_id),
                 |view| {
                     view.child(
                         pane(theme)
-                            .h(px(120.))
                             .flex_shrink_0()
                             .child(self.input_header(cx))
                             .child(
                                 div()
-                                    .flex_1()
-                                    .min_h_0()
+                                    .h(px(40.))
                                     .min_w_0()
                                     .px_3()
                                     .pb_2()
@@ -803,7 +823,8 @@ impl Render for BatchWorkbench {
                     .flex()
                     .gap(px(theme::space::MD))
                     .when(
-                        !devtools_tools::is_batch_generate_tool(self.tool_id),
+                        !devtools_tools::is_batch_generate_tool(self.tool_id)
+                            && !devtools_tools::is_batch_single_line_tool(self.tool_id),
                         |view| {
                             view.child(
                                 pane(theme)

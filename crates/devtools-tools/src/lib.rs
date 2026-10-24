@@ -256,6 +256,47 @@ pub fn is_batch_tool(id: &str) -> bool {
     )
 }
 
+/// Batch converters whose input is a single value (CIDR, status code, …).
+///
+/// These must use a single-line field in `BatchWorkbench`, not a tall textarea.
+/// Tools that accept documents, lists, payloads, or multi-field line protocols
+/// stay multiline.
+pub fn is_batch_single_line_tool(id: &str) -> bool {
+    matches!(
+        id,
+        ids_list::TIMESTAMP
+            | ids_list::CASE
+            | ids_list::SLUGIFY
+            | ids_list::NUMBER_BASE
+            | ids_list::ROMAN
+            | ids_list::PERCENTAGE
+            | ids_list::CHMOD
+            | ids_list::COLOR
+            | ids_list::BASIC_AUTH
+            | ids_list::EMAIL_NORM
+            | ids_list::IPV4_SUBNET
+            | ids_list::IPV4_ADDR
+            | ids_list::IPV4_RANGE
+            | ids_list::MIME
+            | ids_list::HTTP_STATUS
+            | ids_list::UA_PARSE
+            | ids_list::IBAN
+            | ids_list::TEMPERATURE
+            | ids_list::ETA
+            | ids_list::NUMERONYM
+            | ids_list::OBFUSCATE
+            | ids_list::NATO
+            | ids_list::SAFELINK
+            | ids_list::PASSWORD_STRENGTH
+            | ids_list::KEYCODE
+            | ids_list::PHONE
+            | ids_list::MATH_EVAL
+            | ids_list::CRON_PRESETS
+            | ids_list::GIT_MEMO
+            | ids_list::REGEX_MEMO
+    )
+}
+
 /// Batch tools that need an explicit Generate click (random output).
 pub fn is_batch_generate_tool(id: &str) -> bool {
     matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN | ids_list::RANDOM_PORT | ids_list::RSA_KEYGEN | ids_list::BIP39)
@@ -306,5 +347,14 @@ mod tests {
         assert!(is_transform_tool(ids::TOKEN));
         assert!(!is_transform_tool(ids::TIMESTAMP));
         assert!(!is_network_tool(ids::URL_PARSE));
+        assert!(is_batch_single_line_tool(ids::IPV4_SUBNET));
+        assert!(is_batch_single_line_tool(ids::IPV4_ADDR));
+        assert!(is_batch_single_line_tool(ids::HTTP_STATUS));
+        assert!(is_batch_single_line_tool(ids::TIMESTAMP));
+        assert!(!is_batch_single_line_tool(ids::BASE64));
+        assert!(!is_batch_single_line_tool(ids::HMAC));
+        assert!(!is_batch_single_line_tool(ids::LIST_CONV));
+        assert!(!is_batch_single_line_tool(ids::JSON_YAML));
+        assert!(!is_batch_single_line_tool(ids::WIFI_QR));
     }
 }

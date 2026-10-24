@@ -71,6 +71,20 @@ impl TextField {
         self.placeholder = placeholder.into();
         cx.notify();
     }
+
+    /// Switch between line field and multiline editor. Strips newlines when
+    /// entering single-line mode.
+    pub fn set_multiline(&mut self, multiline: bool, cx: &mut Context<Self>) {
+        if self.multiline == multiline {
+            return;
+        }
+        self.multiline = multiline;
+        self.buffer.set_multiline(multiline);
+        self.preferred_x = None;
+        self.scroll.set_offset(point(px(0.), px(0.)));
+        cx.notify();
+    }
+
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.buffer.select_all();
         self.edit(None, "", false, None, cx);
