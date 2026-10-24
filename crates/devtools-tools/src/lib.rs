@@ -57,6 +57,20 @@ pub mod ulid_tool;
 pub mod url_encode;
 pub mod url_parse;
 pub mod uuid_tool;
+pub mod xml_tool;
+pub mod csv_tool;
+pub mod json_diff_tool;
+pub mod password_strength;
+pub mod keycode_info;
+pub mod phone_tool;
+pub mod ascii_drawer;
+pub mod random_port;
+pub mod unicode_escape;
+pub mod qr_tool;
+pub mod wifi_qr;
+pub mod meta_tags;
+pub mod svg_placeholder;
+pub mod cron_presets;
 
 mod suggest;
 
@@ -110,6 +124,21 @@ pub fn catalog() -> Vec<ToolMeta> {
         safelink::meta(),
         iban_tool::meta(),
         docker_compose::meta(),
+        xml_tool::meta(),
+        csv_tool::meta(),
+        data_format::yaml_toml_meta(),
+        json_diff_tool::meta(),
+        password_strength::meta(),
+        keycode_info::meta(),
+        phone_tool::meta(),
+        ascii_drawer::meta(),
+        random_port::meta(),
+        unicode_escape::meta(),
+        qr_tool::meta(),
+        wifi_qr::meta(),
+        meta_tags::meta(),
+        svg_placeholder::meta(),
+        cron_presets::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -186,12 +215,27 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::NATO
             | ids_list::SAFELINK
             | ids_list::DOCKER_RUN
+            | ids_list::XML_TOOL
+            | ids_list::JSON_CSV
+            | ids_list::YAML_TOML
+            | ids_list::JSON_DIFF
+            | ids_list::PASSWORD_STRENGTH
+            | ids_list::KEYCODE
+            | ids_list::PHONE
+            | ids_list::ASCII_DRAW
+            | ids_list::RANDOM_PORT
+            | ids_list::UNICODE_ESC
+            | ids_list::QR_CODE
+            | ids_list::WIFI_QR
+            | ids_list::META_TAGS
+            | ids_list::SVG_PLACEHOLDER
+            | ids_list::CRON_PRESETS
     )
 }
 
 /// Batch tools that need an explicit Generate click (random output).
 pub fn is_batch_generate_tool(id: &str) -> bool {
-    matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN)
+    matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN | ids_list::RANDOM_PORT)
 }
 
 /// Tools that use the network workbench (`NetworkUse::Explicit`).
@@ -211,7 +255,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 51);
+        assert_eq!(registry.tools().len(), 66);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -226,6 +270,9 @@ mod tests {
         assert!(is_batch_tool(ids::TIMESTAMP));
         assert!(is_batch_tool(ids::BASIC_AUTH));
         assert!(is_batch_generate_tool(ids::MAC_GEN));
+        assert!(is_batch_tool(ids::QR_CODE));
+        assert!(is_batch_tool(ids::XML_TOOL));
+        assert!(is_batch_generate_tool(ids::RANDOM_PORT));
         assert!(is_transform_tool(ids::TOKEN));
         assert!(!is_transform_tool(ids::TIMESTAMP));
         assert!(!is_network_tool(ids::URL_PARSE));

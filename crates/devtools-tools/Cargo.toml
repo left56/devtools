@@ -25,6 +25,9 @@ dns-lookup = { workspace = true }
 serde_yaml = { workspace = true }
 toml = { workspace = true }
 pulldown-cmark = { workspace = true }
+quick-xml = { workspace = true }
+csv = { workspace = true }
+qrcode = { workspace = true }
 
 [lints]
 workspace = true

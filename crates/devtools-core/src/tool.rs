@@ -56,6 +56,21 @@ pub mod ids {
     pub const NATO: &str = "nato";
     pub const SAFELINK: &str = "safelink";
     pub const DOCKER_RUN: &str = "docker-run";
+    pub const XML_TOOL: &str = "xml-tool";
+    pub const JSON_CSV: &str = "json-csv";
+    pub const YAML_TOML: &str = "yaml-toml";
+    pub const JSON_DIFF: &str = "json-diff";
+    pub const PASSWORD_STRENGTH: &str = "password-strength";
+    pub const KEYCODE: &str = "keycode";
+    pub const PHONE: &str = "phone";
+    pub const ASCII_DRAW: &str = "ascii-draw";
+    pub const RANDOM_PORT: &str = "random-port";
+    pub const UNICODE_ESC: &str = "unicode-esc";
+    pub const QR_CODE: &str = "qr-code";
+    pub const WIFI_QR: &str = "wifi-qr";
+    pub const META_TAGS: &str = "meta-tags";
+    pub const SVG_PLACEHOLDER: &str = "svg-placeholder";
+    pub const CRON_PRESETS: &str = "cron-presets";
 }
 
 /// Whether running the tool contacts the network.

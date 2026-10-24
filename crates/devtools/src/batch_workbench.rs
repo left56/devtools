@@ -13,12 +13,14 @@ use crate::{
 };
 use devtools_core::ids;
 use devtools_tools::{
-    basic_auth, binary_tool, chmod_calc, color_tool, data_format, docker_compose, email_norm,
-    eta_tool, hmac_tool, http_status, iban_tool, ipv4_tool, ipv6_ula, list_conv, mac_gen,
-    markdown_html, mime_tool, nato_alpha, number_base,
+    ascii_drawer, basic_auth, binary_tool, chmod_calc, color_tool, cron_presets, csv_tool,
+    data_format, docker_compose, email_norm, eta_tool, hmac_tool, http_status, iban_tool,
+    ipv4_tool, ipv6_ula, json_diff_tool, keycode_info, list_conv, mac_gen, markdown_html,
+    meta_tags, mime_tool, nato_alpha, number_base,
     number_base::Base,
-    numeronym, obfuscator, otp_tool, percentage, roman, safelink, sql_format, temperature,
-    text_stats, timestamp, ua_parse,
+    numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, qr_tool,
+    random_port, roman, safelink, sql_format, svg_placeholder, temperature, text_stats,
+    timestamp, ua_parse, unicode_escape, wifi_qr, xml_tool,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -155,7 +157,10 @@ impl BatchWorkbench {
             return;
         }
         let input = self.input.read(cx).buffer.text().to_owned();
-        if input.trim().is_empty() && self.tool_id != ids::TEXT_STATS {
+        if input.trim().is_empty()
+            && self.tool_id != ids::TEXT_STATS
+            && self.tool_id != ids::CRON_PRESETS
+        {
             self.rows.clear();
             self.error = None;
             cx.notify();
@@ -209,6 +214,21 @@ impl BatchWorkbench {
             ids::NATO => ("NATO 音标", "拼读字母"),
             ids::SAFELINK => ("Safelink 解码", "提取真实 URL"),
             ids::DOCKER_RUN => ("Docker → Compose", "docker run 粗转"),
+            ids::XML_TOOL => ("XML / JSON", "美化 · 压缩 · 互转"),
+            ids::JSON_CSV => ("JSON ↔ CSV", "对象数组"),
+            ids::YAML_TOML => ("YAML ↔ TOML", "自动识别"),
+            ids::JSON_DIFF => ("JSON diff", "用 --- 分隔左右"),
+            ids::PASSWORD_STRENGTH => ("口令强度", "离线启发式"),
+            ids::KEYCODE => ("按键码", "名称 · keyCode · code"),
+            ids::PHONE => ("电话整理", "E.164 猜测"),
+            ids::ASCII_DRAW => ("ASCII 横幅", "极简字模"),
+            ids::RANDOM_PORT => ("随机端口", "点击生成"),
+            ids::UNICODE_ESC => ("Unicode 转义", "\\u / U+"),
+            ids::QR_CODE => ("QR 码", "SVG · ASCII"),
+            ids::WIFI_QR => ("Wi‑Fi QR", "SSID / 加密 / 密码"),
+            ids::META_TAGS => ("Meta 标签", "OG / Twitter"),
+            ids::SVG_PLACEHOLDER => ("SVG 占位图", "宽x高"),
+            ids::CRON_PRESETS => ("Cron 模板", "常用表达式 · 字段说明"),
             _ => ("工具", "离线"),
         }
     }
@@ -476,6 +496,20 @@ fn run_batch(
         ids::NATO => nato_alpha::convert_all(input),
         ids::SAFELINK => safelink::convert_all(input),
         ids::DOCKER_RUN => docker_compose::convert_all(input),
+        ids::XML_TOOL => xml_tool::convert_all(input),
+        ids::JSON_CSV => csv_tool::convert_all(input),
+        ids::YAML_TOML => data_format::yaml_toml_all(input),
+        ids::JSON_DIFF => json_diff_tool::convert_all(input),
+        ids::PASSWORD_STRENGTH => password_strength::convert_all(input),
+        ids::KEYCODE => keycode_info::convert_all(input),
+        ids::PHONE => phone_tool::convert_all(input),
+        ids::ASCII_DRAW => ascii_drawer::convert_all(input),
+        ids::UNICODE_ESC => unicode_escape::convert_all(input),
+        ids::QR_CODE => qr_tool::convert_all(input),
+        ids::WIFI_QR => wifi_qr::convert_all(input),
+        ids::META_TAGS => meta_tags::convert_all(input),
+        ids::SVG_PLACEHOLDER => svg_placeholder::convert_all(input),
+        ids::CRON_PRESETS => cron_presets::convert_all(input),
         _ => Err("未知批量工具".into()),
     }
 }
@@ -484,6 +518,7 @@ fn run_batch_generate(tool_id: &str) -> Result<Vec<(&'static str, String)>, Stri
     match tool_id {
         ids::IPV6_ULA => Ok(ipv6_ula::generate()),
         ids::MAC_GEN => Ok(mac_gen::generate(true, true)),
+        ids::RANDOM_PORT => Ok(random_port::generate()),
         _ => Err("此工具不支持生成".into()),
     }
 }

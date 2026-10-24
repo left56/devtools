@@ -118,3 +118,34 @@ mod tests {
         assert!(rows[1].1.contains("name"));
     }
 }
+
+
+pub fn yaml_toml_meta() -> ToolMeta {
+    ToolMeta {
+        id: ids::YAML_TOML,
+        name: "YAML ↔ TOML",
+        category: Category::Data,
+        summary: "YAML 与 TOML 互转（经 JSON 中介）。自动识别。",
+        keywords: &["yaml", "toml", "转换"],
+        network: NetworkUse::Offline,
+        availability: Availability::Ready,
+    }
+}
+
+pub fn yaml_toml_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let v = parse_value(input)?;
+    let yaml = serde_yaml::to_string(&v).map_err(|e| e.to_string())?;
+    let toml_v = json_to_toml_value(&v)?;
+    let toml_s = toml::to_string_pretty(&toml_v).map_err(|e| e.to_string())?;
+    Ok(vec![("YAML", yaml), ("TOML", toml_s)])
+}
+
+#[cfg(test)]
+mod yaml_toml_tests {
+    use super::*;
+    #[test]
+    fn yaml_to_toml() {
+        let rows = yaml_toml_all("a: 1\nb: true\n").unwrap();
+        assert!(rows[1].1.contains('a'));
+    }
+}
