@@ -71,6 +71,14 @@ pub mod wifi_qr;
 pub mod meta_tags;
 pub mod svg_placeholder;
 pub mod cron_presets;
+pub mod math_eval;
+pub mod git_memo;
+pub mod regex_memo;
+pub mod base64_hex;
+pub mod bcrypt_tool;
+pub mod encrypt_tool;
+pub mod rsa_tool;
+pub mod bip39_tool;
 
 mod suggest;
 
@@ -139,6 +147,14 @@ pub fn catalog() -> Vec<ToolMeta> {
         meta_tags::meta(),
         svg_placeholder::meta(),
         cron_presets::meta(),
+        math_eval::meta(),
+        git_memo::meta(),
+        regex_memo::meta(),
+        base64_hex::meta(),
+        bcrypt_tool::meta(),
+        encrypt_tool::meta(),
+        rsa_tool::meta(),
+        bip39_tool::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -230,12 +246,20 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::META_TAGS
             | ids_list::SVG_PLACEHOLDER
             | ids_list::CRON_PRESETS
+            | ids_list::MATH_EVAL
+            | ids_list::GIT_MEMO
+            | ids_list::REGEX_MEMO
+            | ids_list::BASE64_HEX
+            | ids_list::BCRYPT
+            | ids_list::ENCRYPT
+            | ids_list::RSA_KEYGEN
+            | ids_list::BIP39
     )
 }
 
 /// Batch tools that need an explicit Generate click (random output).
 pub fn is_batch_generate_tool(id: &str) -> bool {
-    matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN | ids_list::RANDOM_PORT)
+    matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN | ids_list::RANDOM_PORT | ids_list::RSA_KEYGEN | ids_list::BIP39)
 }
 
 /// Tools that use the network workbench (`NetworkUse::Explicit`).
@@ -255,7 +279,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 66);
+        assert_eq!(registry.tools().len(), 74);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -272,6 +296,8 @@ mod tests {
         assert!(is_batch_generate_tool(ids::MAC_GEN));
         assert!(is_batch_tool(ids::QR_CODE));
         assert!(is_batch_tool(ids::XML_TOOL));
+        assert!(is_batch_tool(ids::MATH_EVAL));
+        assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));
         assert!(is_transform_tool(ids::TOKEN));
         assert!(!is_transform_tool(ids::TIMESTAMP));

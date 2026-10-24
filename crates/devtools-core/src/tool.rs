@@ -71,6 +71,14 @@ pub mod ids {
     pub const META_TAGS: &str = "meta-tags";
     pub const SVG_PLACEHOLDER: &str = "svg-placeholder";
     pub const CRON_PRESETS: &str = "cron-presets";
+    pub const MATH_EVAL: &str = "math-eval";
+    pub const GIT_MEMO: &str = "git-memo";
+    pub const REGEX_MEMO: &str = "regex-memo";
+    pub const BASE64_HEX: &str = "base64-hex";
+    pub const BCRYPT: &str = "bcrypt";
+    pub const ENCRYPT: &str = "encrypt";
+    pub const RSA_KEYGEN: &str = "rsa-keygen";
+    pub const BIP39: &str = "bip39";
 }
 
 /// Whether running the tool contacts the network.

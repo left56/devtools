@@ -13,14 +13,15 @@ use crate::{
 };
 use devtools_core::ids;
 use devtools_tools::{
-    ascii_drawer, basic_auth, binary_tool, chmod_calc, color_tool, cron_presets, csv_tool,
-    data_format, docker_compose, email_norm, eta_tool, hmac_tool, http_status, iban_tool,
-    ipv4_tool, ipv6_ula, json_diff_tool, keycode_info, list_conv, mac_gen, markdown_html,
-    meta_tags, mime_tool, nato_alpha, number_base,
+    ascii_drawer, base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, chmod_calc,
+    color_tool, cron_presets, csv_tool, data_format, docker_compose, email_norm, encrypt_tool,
+    eta_tool, git_memo, hmac_tool, http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
+    keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
+    number_base,
     number_base::Base,
     numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, qr_tool,
-    random_port, roman, safelink, sql_format, svg_placeholder, temperature, text_stats,
-    timestamp, ua_parse, unicode_escape, wifi_qr, xml_tool,
+    random_port, regex_memo, roman, rsa_tool, safelink, sql_format, svg_placeholder, temperature,
+    text_stats, timestamp, ua_parse, unicode_escape, wifi_qr, xml_tool,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -160,6 +161,8 @@ impl BatchWorkbench {
         if input.trim().is_empty()
             && self.tool_id != ids::TEXT_STATS
             && self.tool_id != ids::CRON_PRESETS
+            && self.tool_id != ids::GIT_MEMO
+            && self.tool_id != ids::REGEX_MEMO
         {
             self.rows.clear();
             self.error = None;
@@ -229,6 +232,14 @@ impl BatchWorkbench {
             ids::META_TAGS => ("Meta 标签", "OG / Twitter"),
             ids::SVG_PLACEHOLDER => ("SVG 占位图", "宽x高"),
             ids::CRON_PRESETS => ("Cron 模板", "常用表达式 · 字段说明"),
+            ids::MATH_EVAL => ("数学求值", "安全表达式"),
+            ids::GIT_MEMO => ("Git 速查", "关键词过滤"),
+            ids::REGEX_MEMO => ("正则速查", "与测试工具分开"),
+            ids::BASE64_HEX => ("Base64 ↔ Hex", "粘贴载荷"),
+            ids::BCRYPT => ("bcrypt", "哈希 / 校验"),
+            ids::ENCRYPT => ("AES 加解密", "口令派生 · 学习用"),
+            ids::RSA_KEYGEN => ("RSA 密钥", "点击生成 PEM"),
+            ids::BIP39 => ("BIP39", "助记词 · 非钱包"),
             _ => ("工具", "离线"),
         }
     }
@@ -510,6 +521,13 @@ fn run_batch(
         ids::META_TAGS => meta_tags::convert_all(input),
         ids::SVG_PLACEHOLDER => svg_placeholder::convert_all(input),
         ids::CRON_PRESETS => cron_presets::convert_all(input),
+        ids::MATH_EVAL => math_eval::convert_all(input),
+        ids::GIT_MEMO => git_memo::convert_all(input),
+        ids::REGEX_MEMO => regex_memo::convert_all(input),
+        ids::BASE64_HEX => base64_hex::convert_all(input),
+        ids::BCRYPT => bcrypt_tool::convert_all(input),
+        ids::ENCRYPT => encrypt_tool::convert_all(input),
+        ids::BIP39 => bip39_tool::convert_all(input),
         _ => Err("未知批量工具".into()),
     }
 }
@@ -519,6 +537,8 @@ fn run_batch_generate(tool_id: &str) -> Result<Vec<(&'static str, String)>, Stri
         ids::IPV6_ULA => Ok(ipv6_ula::generate()),
         ids::MAC_GEN => Ok(mac_gen::generate(true, true)),
         ids::RANDOM_PORT => Ok(random_port::generate()),
+        ids::RSA_KEYGEN => rsa_tool::generate(2048),
+        ids::BIP39 => bip39_tool::generate(12),
         _ => Err("此工具不支持生成".into()),
     }
 }

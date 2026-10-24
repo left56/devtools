@@ -77,6 +77,14 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
         ids::META_TAGS => "OG",
         ids::SVG_PLACEHOLDER => "▢",
         ids::CRON_PRESETS => "⏱",
+        ids::MATH_EVAL => "=",
+        ids::GIT_MEMO => "git",
+        ids::REGEX_MEMO => "re?",
+        ids::BASE64_HEX => "b16",
+        ids::BCRYPT => "bc",
+        ids::ENCRYPT => "Æ",
+        ids::RSA_KEYGEN => "RSA",
+        ids::BIP39 => "39",
         _ => "·",
     }
 }

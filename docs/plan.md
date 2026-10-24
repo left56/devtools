@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0–M5 已落盘；**it-tools 复刻第三批已合入（目录约 66 个工具）**；工具栏按钮等高；Date-time / BatchWorkbench。M6 分发仍是计划。
+状态：M0–M5 已落盘；**it-tools 可行离线工具基本齐（目录约 74）**；含 bcrypt/AES/RSA/BIP39（学习向文案）。Chronometer/相机/PDF 等仍暂缓。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -92,6 +92,7 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - 新增（it-tools 第一批）：`ulid`、`slugify`、`lorem`、`text-stats`、`roman`、`percentage`、`chmod`、`binary`、`color`。
   - 新增（it-tools 第二批）：`basic-auth`、`hmac`、`token`、`otp`、`email-norm`、`list-conv`、`json-yaml`、`json-toml`、`sql-format`、`markdown-html`、IPv4×3、`ipv6-ula`、`mac-gen`、`mime`、`http-status`、`ua-parse`、`iban`、`temperature`、`eta`、`numeronym`、`obfuscate`、`nato`、`safelink`、`docker-run`；Hash 增 SHA-384。
   - 新增（it-tools 第三批）：`xml-tool`、`json-csv`、`yaml-toml`、`json-diff`、`password-strength`、`keycode`、`phone`、`ascii-draw`、`random-port`、`unicode-esc`、`qr-code`、`wifi-qr`、`meta-tags`、`svg-placeholder`、`cron-presets`。Chronometer 暂缓（需计时器 UI）。
+  - 新增（it-tools 收尾批）：`math-eval`、`git-memo`、`regex-memo`、`base64-hex`、`bcrypt`、`encrypt`、`rsa-keygen`、`bip39`。
   - `case`：snake / camel / Pascal / kebab / CONSTANT。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
@@ -351,11 +352,13 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 | 状态 | 工具 |
 | --- | --- |
-| 已有（≈66） | 第二批全部 + XML/JSON、JSON↔CSV、YAML↔TOML、JSON diff、口令强度、按键码、电话整理、ASCII 横幅、随机端口、Unicode 转义、QR（SVG/ASCII）、Wi‑Fi QR、Meta 标签、SVG 占位、Cron 模板 |
-| 仍缺 / 下一批 | HTML WYSIWYG、JSON→CSV 以外的部分转换变体、Password 之外的部分 crypto 周边、完整 FIGlet、完整 libphonenumber、相机/设备信息等 |
-| 暂缓及原因 | **Chronometer**：需 GPUI 定时器/动画 UI，本批未做。**Camera / Device info**：需硬件与浏览器/系统 API。**PDF 签名 / PDF 任意**：重解析与 UI。**html-wysiwyg**：富文本编辑器超出当前文本框。**Emoji picker**：资源与面板 UI。**RSA / Encryption / bcrypt / BIP39**：密钥管理与安全文案需单独设计。**MAC vendor lookup**：联网库。**Benchmark builder**：长时间任务与图表。Wi‑Fi/QR 已做离线 SVG/ASCII，不做系统分享面板。 |
+| 已有（≈74） | 编码/哈希/JWT/OTP/HMAC/bcrypt、AES-GCM 文本加解密、RSA PEM、BIP39、UUID/ULID/Token、Date-time、进制/罗马/百分比/chmod、颜色/温度/ETA、JSON 全家桶（含 YAML/TOML/CSV/XML/diff）、Markdown、SQL 启发式、列表/邮箱/口令强度/遮罩/NATO/ASCII 横幅/Unicode、正则测试+速查、Git 速查、数学求值、IPv4/IPv6/MAC/端口、MIME/HTTP 状态/UA/Safelink/IBAN/电话启发式、QR+Wi‑Fi QR、Meta/SVG 占位、Docker run→Compose、Cron 下次运行+模板、HTTP/DNS 显式联网 |
+| 视为已覆盖 / 不重复 | yaml-viewer ≈ JSON↔YAML 美化结果；hash-text ≈ Hash；integer base ≈ number-base；case/slugify 已有；text-binary + unicode-esc 覆盖码点 |
+| 暂缓及原因 | **Chronometer**：需 GPUI 定时器 UI。**Camera / Device info**：硬件 API。**PDF / PDF signature**：重解析。**html-wysiwyg**：富文本。**Emoji picker**：完整表情包面板。**MAC vendor lookup**：需 OUI 库/联网。**Benchmark builder**：长任务与图表。完整 FIGlet / libphonenumber：体积与数据。 |
 
-设计原则：优先「一输入、多结果、每行可复制」；随机生成类显式按钮；日期时间默认当前时间。Linux-first，纯 Rust，Offline 除非 `NetworkUse::Explicit`。
+安全类（bcrypt / encrypt / rsa / bip39）均 Offline；界面写明学习/调试用途，不把派生口令当高安全 KDF。
+
+设计原则：一输入多结果、每行可复制；随机/密钥类显式「生成」；Linux-first。
 
 
 ## 新增一个工具
