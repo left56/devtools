@@ -513,7 +513,7 @@ impl BatchWorkbench {
                                 .text_xs()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme.muted)
-                                .child(*label),
+                                .child(single_line(*label)),
                         )
                         .child(
                             div()
@@ -660,21 +660,21 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::BINARY => "文本，或二进制 / 十六进制",
         ids::COLOR => "#336699 或 rgb(51, 102, 153)",
         ids::BASIC_AUTH => "user:password",
-        ids::HMAC => "第一行：密钥\n其余：消息",
+        ids::HMAC => "第一行：密钥 · 其余：消息",
         ids::OTP => "Base32 密钥；可选第二行验证码",
         ids::EMAIL_NORM => "name+tag@gmail.com",
         ids::LIST_CONV => "一行一项，或逗号分隔",
         ids::JSON_YAML | ids::JSON_TOML | ids::YAML_TOML => "粘贴 JSON / YAML / TOML",
         ids::SQL_FORMAT => "SELECT * FROM t WHERE …",
-        ids::MARKDOWN_HTML => "# 标题\n\n**粗体**",
+        ids::MARKDOWN_HTML => "# 标题  **粗体**",
         ids::IPV4_SUBNET => "192.168.1.10/24",
         ids::IPV4_ADDR => "192.168.1.1 或 3232235777",
         ids::IPV4_RANGE => "192.168.1.0-192.168.1.255",
         ids::IPV6_ULA | ids::MAC_GEN | ids::RANDOM_PORT | ids::RSA_KEYGEN => "点击「生成」",
         ids::BIP39 => "可选：粘贴助记词进行校验",
         ids::QR_CODE => "要编码的文本或 URL",
-        ids::WIFI_QR => "第1行 SSID\n第2行 WPA/WEP/nopass\n第3行密码",
-        ids::SVG_PLACEHOLDER => "宽x高，例如 320x180\n可选文字",
+        ids::WIFI_QR => "第1行 SSID · 第2行 WPA/WEP/nopass · 第3行密码",
+        ids::SVG_PLACEHOLDER => "宽x高，例如 320x180 · 可选第二行文字",
         ids::MIME => "png 或 image/png",
         ids::HTTP_STATUS => "404 或 not found",
         ids::UA_PARSE => "粘贴 User-Agent 字符串",

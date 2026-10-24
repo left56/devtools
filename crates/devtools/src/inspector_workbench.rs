@@ -571,7 +571,7 @@ impl InspectorWorkbench {
                                     .text_xs()
                                     .font(crate::theme::monospace())
                                     .text_color(theme.muted)
-                                    .child(expr.clone()),
+                                    .child(single_line(expr.as_str())),
                             ),
                     )
                     .child(
@@ -762,7 +762,7 @@ impl InspectorWorkbench {
                             .bg(theme.elevated)
                             .font(crate::theme::monospace())
                             .text_sm()
-                            .child(replaced.clone()),
+                            .child(multiline_mono(theme, replaced.as_str())),
                     ),
             );
         }

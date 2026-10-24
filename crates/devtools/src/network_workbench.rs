@@ -6,7 +6,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, chip, empty_hint, kv_row, pane, pane_header, pane_title, paste_button,
+        banner, button, chip, empty_hint, multiline_mono, kv_row, pane, pane_header, pane_title, paste_button,
         primary_button, status_chip, workbench_title, StatusKind,
     },
 };
@@ -284,7 +284,7 @@ impl NetworkWorkbench {
                             .border_color(theme.border)
                             .font(crate::theme::monospace())
                             .text_sm()
-                            .child(response.body.clone()),
+                            .child(multiline_mono(theme, response.body.as_str())),
                     )
                     .into_any_element()
             }

@@ -28,7 +28,7 @@ pulldown-cmark = { workspace = true }
 quick-xml = { workspace = true }
 csv = { workspace = true }
 qrcode = { workspace = true }
-meval = { workspace = true }
+fasteval = { workspace = true }
 bcrypt = { workspace = true }
 aes-gcm = { workspace = true }
 rsa = { workspace = true }

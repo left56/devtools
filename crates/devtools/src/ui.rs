@@ -73,7 +73,7 @@ pub fn chip(
             theme.border_subtle
         })
         .hover(move |s| s.bg(theme.selected).text_color(theme.text))
-        .child(label.into())
+        .child(single_line(label.into().as_ref()))
 }
 
 /// Non-interactive status pill (离线 · 已更新结果).
@@ -147,7 +147,8 @@ pub fn multiline_mono(theme: Theme, text: impl AsRef<str>) -> Div {
         let display = if line.is_empty() {
             SharedString::from(" ")
         } else {
-            SharedString::from(line.to_owned())
+            // lines() already strips separators; still flatten defensively.
+            single_line(line)
         };
         col = col.child(div().min_w_0().child(display));
     }
@@ -231,7 +232,7 @@ pub fn pane_title(theme: Theme, label: impl Into<SharedString>) -> Div {
         .text_xs()
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme.muted)
-        .child(label.into())
+        .child(single_line(label.into().as_ref()))
 }
 
 /// Workbench page title row: title (semibold) > meta (muted) > trailing.
@@ -274,7 +275,7 @@ pub fn section_label(theme: Theme, label: impl Into<SharedString>) -> Div {
         .text_xs()
         .font_weight(FontWeight::MEDIUM)
         .text_color(theme.faint)
-        .child(label.into())
+        .child(single_line(label.into().as_ref()))
 }
 
 /// Quiet empty / hint state for result panes.
@@ -353,4 +354,15 @@ pub fn paste_button(theme: Theme, id: impl Into<SharedString>) -> Stateful<Div> 
         .border_color(theme.accent_muted)
         .hover(move |s| s.bg(theme.selected))
         .child("粘贴")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::single_line;
+
+    #[test]
+    fn single_line_flattens_newlines() {
+        let s = single_line("a\nb\rc");
+        assert_eq!(s.as_ref(), "a b c");
+    }
 }

@@ -5,6 +5,11 @@ use std::ops::Range;
 
 const LINE_HEIGHT: f32 = 24.;
 
+/// GPUI panics if a shaped text run contains `\n` / `\r`.
+fn flatten_text_run(text: &str) -> SharedString {
+    crate::ui::single_line(text)
+}
+
 pub struct Edited;
 impl EventEmitter<Edited> for TextField {}
 
@@ -41,7 +46,7 @@ impl TextField {
             buffer: Buffer::new(multiline),
             multiline,
             read_only,
-            placeholder: placeholder.into(),
+            placeholder: flatten_text_run(placeholder),
             scroll: ScrollHandle::new(),
             layouts: Vec::new(),
             selecting: false,
@@ -53,7 +58,7 @@ impl TextField {
         self.focus.focus(window);
     }
     pub fn set_output(&mut self, text: &str, cx: &mut Context<Self>) {
-        self.buffer.set_text(text);
+        self.buffer.set_text_normalized(text);
         self.scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
     }
@@ -68,7 +73,8 @@ impl TextField {
         self.scroll.set_offset(point(px(0.), px(0.)));
     }
     pub fn set_placeholder(&mut self, placeholder: &'static str, cx: &mut Context<Self>) {
-        self.placeholder = placeholder.into();
+        // Placeholders are drawn as a single shaped run — never keep newlines.
+        self.placeholder = flatten_text_run(placeholder);
         cx.notify();
     }
 
@@ -554,7 +560,8 @@ impl Render for TextField {
                     text: if placeholder {
                         self.placeholder.clone()
                     } else {
-                        text.to_owned().into()
+                        // Defend against \r left in a "line" after a naive split.
+                        flatten_text_run(text)
                     },
                     placeholder,
                 };

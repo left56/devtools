@@ -214,6 +214,17 @@ impl Buffer {
         self.composition = None;
         self.undo.clear();
     }
+
+    /// Like [`set_text`], but normalizes newlines to match this buffer's mode
+    /// so GPUI never shapes a run that still contains `\r` / `\n`.
+    pub fn set_text_normalized(&mut self, text: &str) {
+        let normalized = if self.multiline {
+            text.replace("\r\n", "\n").replace('\r', "\n")
+        } else {
+            text.replace(['\r', '\n'], "")
+        };
+        self.set_text(&normalized);
+    }
 }
 
 #[cfg(test)]
