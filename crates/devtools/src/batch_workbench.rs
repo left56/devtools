@@ -404,12 +404,8 @@ impl BatchWorkbench {
             }
             row = row
                 .child(
-                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.generate_random(cx);
-                        }),
+                    primary_button(theme, "batch-generate", "生成").on_click(
+                        cx.listener(|this, _, _, cx| this.generate_random(cx)),
                     ),
                 )
                 .child(button(theme, "batch-clear", "清空结果").on_click(
@@ -435,12 +431,8 @@ impl BatchWorkbench {
             }
             row = row
                 .child(
-                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.generate_random(cx);
-                        }),
+                    primary_button(theme, "batch-generate", "生成").on_click(
+                        cx.listener(|this, _, _, cx| this.generate_random(cx)),
                     ),
                 )
                 .child(button(theme, "batch-clear", "清空结果").on_click(
@@ -467,12 +459,8 @@ impl BatchWorkbench {
             }
             row = row
                 .child(
-                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.generate_random(cx);
-                        }),
+                    primary_button(theme, "batch-generate", "生成").on_click(
+                        cx.listener(|this, _, _, cx| this.generate_random(cx)),
                     ),
                 )
                 .child(button(theme, "batch-clear", "清空结果").on_click(

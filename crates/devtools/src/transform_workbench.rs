@@ -229,14 +229,8 @@ impl TransformWorkbench {
         row = row.child(self.quantity_chips(cx));
         row = row
             .child(
+                // on_click only — mouse_down+click would generate twice per press.
                 primary_button(theme, "generate", "生成")
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.execute(cx);
-                        }),
-                    )
                     .on_click(cx.listener(|this, _, _, cx| this.execute(cx))),
             )
             .child(
