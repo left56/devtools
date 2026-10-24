@@ -100,7 +100,8 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
 - **UI 视觉打磨**：明/暗双色板（`Theme::light` / `Theme::dark`），经 `WindowAppearance` + `observe_window_appearance` 跟随系统；`DEVTOOLS_FORCE_THEME=light|dark` 仅用于截图验收。侧栏每工具独立字形图标（`icons.rs`），分类标签用 `faint`、不可折叠。Linux Xvfb 无 portal 时默认偏 Light；截图见 `/workspace/devtools-linux-verify-theme/`。
-- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem` 等显式生成工具；「生成」按钮。**转换器不再走此台**，统一 `BatchWorkbench`。
+- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem`；选项芯片 +「生成」+ 全宽结果，**无原文栏**。Batch 侧纯生成（ULA/MAC/端口/RSA/BIP39）同样隐藏输入栏；BIP39 另有紧凑「助记词」校验条。QR/Wi‑Fi/SVG 保留正确标签的输入。
+- 生成类工具（UUID/ULID/Token/Lorem、IPv6 ULA/MAC/端口/RSA/BIP39）= 选项芯片 +「生成」+ 结果，**无原文/输入源栏**。QR/Wi‑Fi QR/SVG 等需载荷的工具保留标注正确的输入区（文本/SSID/尺寸），不是假「原文」。
 - **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
 - **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
 - **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。

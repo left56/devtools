@@ -33,6 +33,7 @@ pub struct BatchWorkbench {
     error: Option<String>,
     notice: &'static str,
     num_from: Base,
+    bip39_words: usize,
     result_scroll: ScrollHandle,
 }
 
@@ -41,7 +42,13 @@ impl BatchWorkbench {
         let input = cx.new(|cx| TextField::new(true, false, "在这里粘贴输入", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
-            this.live_refresh(cx);
+            if this.tool_id == ids::BIP39 {
+                this.validate_bip39(cx);
+            } else if !devtools_tools::is_batch_generate_tool(this.tool_id) {
+                this.live_refresh(cx);
+            } else {
+                cx.notify();
+            }
         })
         .detach();
         Self {
@@ -51,11 +58,15 @@ impl BatchWorkbench {
             error: None,
             notice: "",
             num_from: Base::DEC,
+            bip39_words: 12,
             result_scroll: ScrollHandle::new(),
         }
     }
 
     pub fn focus_input(&self, window: &mut Window, cx: &App) {
+        if devtools_tools::is_batch_generate_tool(self.tool_id) && self.tool_id != ids::BIP39 {
+            return;
+        }
         self.input.read(cx).focus(window);
     }
 
@@ -78,6 +89,9 @@ impl BatchWorkbench {
             self.notice = "";
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
+                if devtools_tools::is_batch_generate_tool(tool_id) {
+                    field.clear(cx);
+                }
             });
         }
         if tool_id == ids::TIMESTAMP {
@@ -87,7 +101,9 @@ impl BatchWorkbench {
                 self.input.update(cx, |field, cx| field.set_input(&seed, cx));
             }
         }
-        self.live_refresh(cx);
+        if !devtools_tools::is_batch_generate_tool(tool_id) {
+            self.live_refresh(cx);
+        }
         self.focus_input(window, cx);
         cx.notify();
     }
@@ -111,6 +127,18 @@ impl BatchWorkbench {
     }
 
     fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if devtools_tools::is_batch_generate_tool(self.tool_id) {
+            self.rows.clear();
+            self.error = None;
+            self.notice = "";
+            if self.tool_id == ids::BIP39 {
+                self.input.update(cx, |field, cx| {
+                    field.clear(cx);
+                });
+            }
+            cx.notify();
+            return;
+        }
         if self.tool_id == ids::TIMESTAMP {
             let seed = timestamp::now_seed();
             self.input.update(cx, |field, cx| {
@@ -139,11 +167,35 @@ impl BatchWorkbench {
     }
 
     fn generate_random(&mut self, cx: &mut Context<Self>) {
-        match run_batch_generate(self.tool_id) {
+        // Clear optional BIP39 validate field so result is clearly a fresh generate.
+        if self.tool_id == ids::BIP39 {
+            self.input.update(cx, |field, cx| field.clear(cx));
+        }
+        match run_batch_generate(self.tool_id, self.bip39_words) {
             Ok(rows) => {
                 self.rows = rows;
                 self.error = None;
                 self.notice = "已生成";
+            }
+            Err(message) => {
+                self.rows.clear();
+                self.error = Some(message);
+            }
+        }
+        cx.notify();
+    }
+
+    fn validate_bip39(&mut self, cx: &mut Context<Self>) {
+        let input = self.input.read(cx).buffer.text().to_owned();
+        if input.trim().is_empty() {
+            self.error = None;
+            cx.notify();
+            return;
+        }
+        match bip39_tool::convert_all(&input) {
+            Ok(rows) => {
+                self.rows = rows;
+                self.error = None;
             }
             Err(message) => {
                 self.rows.clear();
@@ -246,7 +298,7 @@ impl BatchWorkbench {
             ids::BCRYPT => ("bcrypt", "哈希 / 校验"),
             ids::ENCRYPT => ("AES 加解密", "口令派生 · 学习用"),
             ids::RSA_KEYGEN => ("RSA 密钥", "点击生成 PEM"),
-            ids::BIP39 => ("BIP39", "助记词 · 非钱包"),
+            ids::BIP39 => ("BIP39", "生成助记词 · 可粘贴校验 · 非钱包"),
             _ => ("工具", "离线"),
         }
     }
@@ -272,13 +324,57 @@ impl BatchWorkbench {
                     .text_color(theme.muted)
                     .child("也可在输入里写 0x / 0b / 0o"),
             );
+        } else if self.tool_id == ids::BIP39 {
+            row = row.child(div().text_xs().text_color(theme.muted).child("词数"));
+            for n in [12usize, 24] {
+                let active = self.bip39_words == n;
+                let id = format!("bip39-words-{n}");
+                row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.bip39_words = n;
+                        cx.notify();
+                    },
+                )));
+            }
+            row = row
+                .child(
+                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.generate_random(cx);
+                        }),
+                    ),
+                )
+                .child(button(theme, "batch-clear", "清空结果").on_click(
+                    cx.listener(|this, _, window, cx| this.clear(window, cx)),
+                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted)
+                        .child("下方可粘贴助记词校验"),
+                );
         } else if devtools_tools::is_batch_generate_tool(self.tool_id) {
-            row = row.child(
-                div()
-                    .text_xs()
-                    .text_color(theme.muted)
-                    .child("点击「生成」· 每行可单独复制"),
-            );
+            row = row
+                .child(
+                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.generate_random(cx);
+                        }),
+                    ),
+                )
+                .child(button(theme, "batch-clear", "清空结果").on_click(
+                    cx.listener(|this, _, window, cx| this.clear(window, cx)),
+                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted)
+                        .child("每行可单独复制"),
+                );
         } else {
             row = row.child(
                 div()
@@ -293,7 +389,7 @@ impl BatchWorkbench {
     fn input_header(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let mut header = pane_header(theme)
-            .child(pane_title(theme, "输入"))
+            .child(pane_title(theme, input_pane_title(self.tool_id)))
             .child(
                 paste_button(theme, "batch-paste").on_mouse_down(
                     MouseButton::Left,
@@ -314,17 +410,6 @@ impl BatchWorkbench {
                 ),
             );
         }
-        if devtools_tools::is_batch_generate_tool(self.tool_id) {
-            header = header.child(
-                primary_button(theme, "batch-generate", "生成").on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                        cx.stop_propagation();
-                        this.generate_random(cx);
-                    }),
-                ),
-            );
-        }
         header.child(button(theme, "batch-clear", "清空").on_click(
             cx.listener(|this, _, window, cx| this.clear(window, cx)),
         ))
@@ -335,7 +420,14 @@ impl BatchWorkbench {
         let header = pane_header(theme).child(pane_title(theme, "结果"));
         let mut pane_view = pane(theme).flex_1().child(header);
         if self.rows.is_empty() && self.error.is_none() {
-            pane_view = pane_view.child(empty_hint(theme, "输入后显示全部格式"));
+            let hint = if self.tool_id == ids::BIP39 {
+                "点击「生成」，或在下方粘贴助记词校验"
+            } else if devtools_tools::is_batch_generate_tool(self.tool_id) {
+                "点击「生成」显示结果"
+            } else {
+                "输入后显示全部格式"
+            };
+            pane_view = pane_view.child(empty_hint(theme, hint));
         } else {
             let rows: Vec<AnyElement> = self
                 .rows
@@ -448,7 +540,11 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::IPV4_SUBNET => "192.168.1.10/24",
         ids::IPV4_ADDR => "192.168.1.1 或 3232235777",
         ids::IPV4_RANGE => "192.168.1.0-192.168.1.255",
-        ids::IPV6_ULA | ids::MAC_GEN => "点击「生成」",
+        ids::IPV6_ULA | ids::MAC_GEN | ids::RANDOM_PORT | ids::RSA_KEYGEN => "点击「生成」",
+        ids::BIP39 => "可选：粘贴助记词进行校验",
+        ids::QR_CODE => "要编码的文本或 URL",
+        ids::WIFI_QR => "第1行 SSID\n第2行 WPA/WEP/nopass\n第3行密码",
+        ids::SVG_PLACEHOLDER => "宽x高，例如 320x180\n可选文字",
         ids::MIME => "png 或 image/png",
         ids::HTTP_STATUS => "404 或 not found",
         ids::UA_PARSE => "粘贴 User-Agent 字符串",
@@ -553,14 +649,31 @@ fn run_batch(
     }
 }
 
-fn run_batch_generate(tool_id: &str) -> Result<Vec<(&'static str, String)>, String> {
+fn run_batch_generate(
+    tool_id: &str,
+    bip39_words: usize,
+) -> Result<Vec<(&'static str, String)>, String> {
     match tool_id {
         ids::IPV6_ULA => Ok(ipv6_ula::generate()),
         ids::MAC_GEN => Ok(mac_gen::generate(true, true)),
         ids::RANDOM_PORT => Ok(random_port::generate()),
         ids::RSA_KEYGEN => rsa_tool::generate(2048),
-        ids::BIP39 => bip39_tool::generate(12),
+        ids::BIP39 => bip39_tool::generate(bip39_words),
         _ => Err("此工具不支持生成".into()),
+    }
+}
+
+fn input_pane_title(tool_id: &str) -> &'static str {
+    match tool_id {
+        ids::QR_CODE => "文本 / URL",
+        ids::WIFI_QR => "SSID / 加密 / 密码",
+        ids::SVG_PLACEHOLDER => "尺寸",
+        ids::BASIC_AUTH => "账号",
+        ids::OTP => "密钥",
+        ids::BCRYPT | ids::ENCRYPT => "口令",
+        ids::BIP39 => "助记词",
+        ids::HMAC => "密钥 + 消息",
+        _ => "输入",
     }
 }
 
@@ -603,16 +716,12 @@ impl Render for BatchWorkbench {
             .when_some(self.error.as_ref(), |view, error| {
                 view.child(crate::ui::banner(theme, StatusKind::Error, error.clone()))
             })
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .flex()
-                    .gap(px(theme::space::MD))
-                    .child(
+            .when(
+                self.tool_id == ids::BIP39,
+                |view| {
+                    view.child(
                         pane(theme)
-                            .w(relative(0.38))
+                            .h(px(120.))
                             .flex_shrink_0()
                             .child(self.input_header(cx))
                             .child(
@@ -620,9 +729,38 @@ impl Render for BatchWorkbench {
                                     .flex_1()
                                     .min_h_0()
                                     .min_w_0()
-                                    .p_3()
+                                    .px_3()
+                                    .pb_2()
                                     .child(self.input.clone()),
                             ),
+                    )
+                },
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .flex()
+                    .gap(px(theme::space::MD))
+                    .when(
+                        !devtools_tools::is_batch_generate_tool(self.tool_id),
+                        |view| {
+                            view.child(
+                                pane(theme)
+                                    .w(relative(0.38))
+                                    .flex_shrink_0()
+                                    .child(self.input_header(cx))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_h_0()
+                                            .min_w_0()
+                                            .p_3()
+                                            .child(self.input.clone()),
+                                    ),
+                            )
+                        },
                     )
                     .child(self.result_pane(cx)),
             )
