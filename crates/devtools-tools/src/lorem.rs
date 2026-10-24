@@ -1,5 +1,6 @@
 //! Lorem ipsum paragraph generator. Explicit generate; offline word list.
 
+use crate::quantity;
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
 const WORDS: &[&str] = &[
@@ -19,11 +20,20 @@ pub fn meta() -> ToolMeta {
         id: ids::LOREM,
         name: "Lorem ipsum",
         category: Category::Generators,
-        summary: "生成占位拉丁文段落。点击生成；可指定段落数。",
+        summary: "生成占位拉丁文。可指定段落数与份数。",
         keywords: &["lorem", "ipsum", "placeholder", "占位", "假文"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+/// Generate `qty` independent blocks (each with `paragraphs` paragraphs).
+pub fn generate_many(paragraphs: usize, qty: usize) -> String {
+    let n = quantity::clamp(qty);
+    (0..n)
+        .map(|_| generate(paragraphs))
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 /// Generate `paragraphs` paragraphs (clamped 1..=20). Deterministic from seed counter.
@@ -76,6 +86,11 @@ mod tests {
         assert!(text.starts_with("Lorem"));
         assert!(text.ends_with('.'));
         assert!(!text.contains("\n\n"));
+    }
+
+    #[test]
+    fn generate_many_count() {
+        assert_eq!(generate_many(1, 3).split("\n\n").count(), 3);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! Random TCP port generator (ephemeral range).
 
+use crate::quantity;
 use uuid::Uuid;
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
@@ -8,11 +9,27 @@ pub fn meta() -> ToolMeta {
         id: ids::RANDOM_PORT,
         name: "Random port",
         category: Category::Generators,
-        summary: "生成随机端口（默认 1024–65535）。点击生成。",
+        summary: "生成随机端口（默认 1024–65535）。可设数量。",
         keywords: &["port", "tcp", "random", "端口"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+
+pub fn generate_many(qty: usize) -> Vec<(&'static str, String)> {
+    let n = quantity::clamp(qty);
+    if n == 1 {
+        return generate();
+    }
+    let mut lines = Vec::with_capacity(n);
+    for _ in 0..n {
+        lines.push(generate()[0].1.clone());
+    }
+    vec![
+        ("数量", n.to_string()),
+        ("全部", lines.join("\n")),
+    ]
 }
 
 pub fn generate() -> Vec<(&'static str, String)> {
@@ -37,5 +54,6 @@ mod tests {
         let rows = generate();
         let p: u16 = rows[0].1.parse().unwrap();
         assert!((1024..=65535).contains(&p));
+        assert_eq!(generate_many(5)[1].1.lines().count(), 5);
     }
 }

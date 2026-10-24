@@ -1,5 +1,6 @@
 //! RSA key pair generator (PEM).
 
+use crate::quantity;
 use rand::rngs::OsRng;
 use rsa::pkcs1::{EncodeRsaPrivateKey, EncodeRsaPublicKey, LineEnding};
 use rsa::{RsaPrivateKey, RsaPublicKey};
@@ -15,6 +16,32 @@ pub fn meta() -> ToolMeta {
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+
+/// Multiple keypairs (clamped 1..=5 — RSA is expensive).
+pub fn generate_many(bits: usize, qty: usize) -> Result<Vec<(&'static str, String)>, String> {
+    let n = quantity::clamp(qty).min(5);
+    if n == 1 {
+        return generate(bits);
+    }
+    let mut blocks = Vec::with_capacity(n);
+    for i in 1..=n {
+        let rows = generate(bits)?;
+        let priv_pem = rows
+            .iter()
+            .find(|r| r.0.contains("私钥") || r.0.to_ascii_lowercase().contains("private"))
+            .map(|r| r.1.clone())
+            .or_else(|| rows.first().map(|r| r.1.clone()))
+            .unwrap_or_default();
+        blocks.push(format!("# {i}\n{priv_pem}"));
+    }
+    Ok(vec![
+        ("数量", n.to_string()),
+        ("位数", bits.to_string()),
+        ("全部私钥 PEM", blocks.join("\n\n")),
+        ("警告", "仅供开发调试".into()),
+    ])
 }
 
 pub fn generate(bits: usize) -> Result<Vec<(&'static str, String)>, String> {

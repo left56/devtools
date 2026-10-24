@@ -43,6 +43,7 @@ pub mod numeronym;
 pub mod obfuscator;
 pub mod otp_tool;
 pub mod percentage;
+pub mod quantity;
 pub mod regex_tool;
 pub mod roman;
 pub mod safelink;

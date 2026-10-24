@@ -1,5 +1,6 @@
 //! BIP39 mnemonic generate / validate (learning only).
 
+use crate::quantity;
 use bip39::{Language, Mnemonic};
 use rand::RngCore;
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
@@ -37,6 +38,30 @@ pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
     }
 }
 
+
+pub fn generate_many(words: usize, qty: usize) -> Result<Vec<(&'static str, String)>, String> {
+    let n = quantity::clamp(qty);
+    if n == 1 {
+        return generate(words);
+    }
+    let mut lines = Vec::with_capacity(n);
+    for _ in 0..n {
+        let rows = generate(words)?;
+        let phrase = rows
+            .iter()
+            .find(|r| r.0 == "助记词")
+            .map(|r| r.1.clone())
+            .unwrap_or_default();
+        lines.push(phrase);
+    }
+    Ok(vec![
+        ("词数", words.to_string()),
+        ("数量", n.to_string()),
+        ("全部", lines.join("\n")),
+        ("警告", "学习/测试专用，不是钱包产品".into()),
+    ])
+}
+
 pub fn generate(words: usize) -> Result<Vec<(&'static str, String)>, String> {
     let entropy_bytes = match words {
         12 => 16,
@@ -63,5 +88,6 @@ mod tests {
         let phrase = rows.iter().find(|r| r.0 == "助记词").unwrap().1.clone();
         let check = convert_all(&phrase).unwrap();
         assert_eq!(check[0].1, "有效");
+        assert_eq!(generate_many(12, 3).unwrap()[2].1.lines().count(), 3);
     }
 }

@@ -20,7 +20,7 @@ use devtools_tools::{
     keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
     number_base,
     number_base::Base,
-    numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, qr_tool,
+    numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, quantity, qr_tool,
     random_port, regex_memo, roman, rsa_tool, safelink, slugify, sql_format, svg_placeholder,
     temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr, xml_tool,
 };
@@ -34,6 +34,7 @@ pub struct BatchWorkbench {
     notice: &'static str,
     num_from: Base,
     bip39_words: usize,
+    quantity: usize,
     result_scroll: ScrollHandle,
 }
 
@@ -59,6 +60,7 @@ impl BatchWorkbench {
             notice: "",
             num_from: Base::DEC,
             bip39_words: 12,
+            quantity: 1,
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -87,6 +89,7 @@ impl BatchWorkbench {
             self.rows.clear();
             self.error = None;
             self.notice = "";
+            self.quantity = 1;
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
                 if devtools_tools::is_batch_generate_tool(tool_id) {
@@ -171,7 +174,7 @@ impl BatchWorkbench {
         if self.tool_id == ids::BIP39 {
             self.input.update(cx, |field, cx| field.clear(cx));
         }
-        match run_batch_generate(self.tool_id, self.bip39_words) {
+        match run_batch_generate(self.tool_id, self.bip39_words, self.quantity) {
             Ok(rows) => {
                 self.rows = rows;
                 self.error = None;
@@ -263,8 +266,8 @@ impl BatchWorkbench {
             ids::IPV4_SUBNET => ("IPv4 子网", "CIDR 计算"),
             ids::IPV4_ADDR => ("IPv4 地址", "点分 · 整数 · 十六进制"),
             ids::IPV4_RANGE => ("IPv4 范围", "起止 → CIDR"),
-            ids::IPV6_ULA => ("IPv6 ULA", "点击生成"),
-            ids::MAC_GEN => ("MAC 生成", "点击生成 · 无 OUI 查询"),
+            ids::IPV6_ULA => ("IPv6 ULA", "点击生成 · 可设数量"),
+            ids::MAC_GEN => ("MAC 生成", "可设数量 · 无 OUI 查询"),
             ids::MIME => ("MIME 类型", "扩展名 ↔ Content-Type"),
             ids::HTTP_STATUS => ("HTTP 状态码", "数字或关键词"),
             ids::UA_PARSE => ("User-Agent", "轻量启发式解析"),
@@ -284,7 +287,7 @@ impl BatchWorkbench {
             ids::KEYCODE => ("按键码", "名称 · keyCode · code"),
             ids::PHONE => ("电话整理", "E.164 猜测"),
             ids::ASCII_DRAW => ("ASCII 横幅", "极简字模"),
-            ids::RANDOM_PORT => ("随机端口", "点击生成"),
+            ids::RANDOM_PORT => ("随机端口", "点击生成 · 可设数量"),
             ids::UNICODE_ESC => ("Unicode 转义", "\\u / U+"),
             ids::QR_CODE => ("QR 码", "SVG · ASCII"),
             ids::WIFI_QR => ("Wi‑Fi QR", "SSID / 加密 / 密码"),
@@ -297,7 +300,7 @@ impl BatchWorkbench {
             ids::BASE64_HEX => ("Base64 ↔ Hex", "粘贴载荷"),
             ids::BCRYPT => ("bcrypt", "哈希 / 校验"),
             ids::ENCRYPT => ("AES 加解密", "口令派生 · 学习用"),
-            ids::RSA_KEYGEN => ("RSA 密钥", "点击生成 PEM"),
+            ids::RSA_KEYGEN => ("RSA 密钥", "点击生成 PEM · 数量≤5"),
             ids::BIP39 => ("BIP39", "生成助记词 · 可粘贴校验 · 非钱包"),
             _ => ("工具", "离线"),
         }
@@ -336,6 +339,18 @@ impl BatchWorkbench {
                     },
                 )));
             }
+            row = row.child(div().text_xs().text_color(theme.muted).child("数量"));
+            for n in quantity::CHOICES {
+                let n = *n;
+                let active = self.quantity == n;
+                let id = format!("batch-qty-{n}");
+                row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.quantity = n;
+                        cx.notify();
+                    },
+                )));
+            }
             row = row
                 .child(
                     primary_button(theme, "batch-generate", "生成").on_mouse_down(
@@ -355,7 +370,50 @@ impl BatchWorkbench {
                         .text_color(theme.muted)
                         .child("下方可粘贴助记词校验"),
                 );
+        } else if self.tool_id == ids::RSA_KEYGEN {
+            row = row.child(div().text_xs().text_color(theme.muted).child("数量"));
+            for n in [1usize, 5] {
+                let active = self.quantity == n;
+                let id = format!("rsa-qty-{n}");
+                row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.quantity = n;
+                        cx.notify();
+                    },
+                )));
+            }
+            row = row
+                .child(
+                    primary_button(theme, "batch-generate", "生成").on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.generate_random(cx);
+                        }),
+                    ),
+                )
+                .child(button(theme, "batch-clear", "清空结果").on_click(
+                    cx.listener(|this, _, window, cx| this.clear(window, cx)),
+                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted)
+                        .child("RSA 较慢，数量上限 5"),
+                );
         } else if devtools_tools::is_batch_generate_tool(self.tool_id) {
+            row = row.child(div().text_xs().text_color(theme.muted).child("数量"));
+            for n in quantity::CHOICES {
+                let n = *n;
+                let active = self.quantity == n;
+                let id = format!("batch-qty-{n}");
+                row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.quantity = n;
+                        cx.notify();
+                    },
+                )));
+            }
             row = row
                 .child(
                     primary_button(theme, "batch-generate", "生成").on_mouse_down(
@@ -652,13 +710,14 @@ fn run_batch(
 fn run_batch_generate(
     tool_id: &str,
     bip39_words: usize,
+    qty: usize,
 ) -> Result<Vec<(&'static str, String)>, String> {
     match tool_id {
-        ids::IPV6_ULA => Ok(ipv6_ula::generate()),
-        ids::MAC_GEN => Ok(mac_gen::generate(true, true)),
-        ids::RANDOM_PORT => Ok(random_port::generate()),
-        ids::RSA_KEYGEN => rsa_tool::generate(2048),
-        ids::BIP39 => bip39_tool::generate(bip39_words),
+        ids::IPV6_ULA => Ok(ipv6_ula::generate_many(qty)),
+        ids::MAC_GEN => Ok(mac_gen::generate_many(true, true, qty)),
+        ids::RANDOM_PORT => Ok(random_port::generate_many(qty)),
+        ids::RSA_KEYGEN => rsa_tool::generate_many(2048, qty),
+        ids::BIP39 => bip39_tool::generate_many(bip39_words, qty),
         _ => Err("此工具不支持生成".into()),
     }
 }

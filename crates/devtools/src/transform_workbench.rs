@@ -1,11 +1,11 @@
 //! Generate-only workbench (UUID / ULID / Token / Lorem).
 //!
-//! No source/「原文」 pane — options chips + 「生成」 + full-width result.
-//! Converters use `BatchWorkbench`.
+//! Options chips + 「数量」 + 「生成」 + full-width result.
+//! UUID v3/v5 show a compact name/namespace strip (not a dead 「原文」 pane).
 
 use crate::{
     actions::PrimaryRun,
-    text_field::TextField,
+    text_field::{Edited, TextField},
     theme::Theme,
     ui::{
         button, chip, pane, pane_header, pane_title, primary_button, status_chip, workbench_title,
@@ -14,17 +14,23 @@ use crate::{
 };
 use devtools_core::ids;
 use devtools_tools::{
-    lorem, token_gen,
+    lorem, quantity, token_gen,
     token_gen::Alphabet as TokenAlphabet,
     ulid_tool,
-    uuid_tool::{self, Version as UuidVersion},
+    uuid_tool::{self, NameParams, NamespaceKind, Version as UuidVersion},
 };
 use gpui::{prelude::FluentBuilder, *};
 
 pub struct TransformWorkbench {
     tool_id: &'static str,
     output: Entity<TextField>,
+    /// Compact name field for UUID v3/v5.
+    uuid_name: Entity<TextField>,
+    /// Custom namespace UUID when NamespaceKind::Custom.
+    uuid_custom_ns: Entity<TextField>,
     uuid_version: UuidVersion,
+    uuid_namespace: NamespaceKind,
+    quantity: usize,
     lorem_paragraphs: usize,
     token_length: usize,
     token_alphabet: TokenAlphabet,
@@ -35,10 +41,27 @@ pub struct TransformWorkbench {
 
 impl TransformWorkbench {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let uuid_name = cx.new(|cx| TextField::new(false, false, "名称（v3/v5 必填）", cx));
+        cx.subscribe(&uuid_name, |this, _, _: &Edited, cx| {
+            this.notice = "";
+            cx.notify();
+        })
+        .detach();
+        let uuid_custom_ns =
+            cx.new(|cx| TextField::new(false, false, "自定义命名空间 UUID", cx));
+        cx.subscribe(&uuid_custom_ns, |this, _, _: &Edited, cx| {
+            this.notice = "";
+            cx.notify();
+        })
+        .detach();
         Self {
             tool_id: ids::UUID,
             output: cx.new(|cx| TextField::new(true, true, "点击「生成」显示结果", cx)),
+            uuid_name,
+            uuid_custom_ns,
             uuid_version: UuidVersion::V4,
+            uuid_namespace: NamespaceKind::Dns,
+            quantity: 1,
             lorem_paragraphs: 1,
             token_length: 32,
             token_alphabet: TokenAlphabet::Hex,
@@ -48,29 +71,47 @@ impl TransformWorkbench {
         }
     }
 
-    /// Generators have no source field; kept for workspace focus routing.
-    pub fn focus_input(&self, _window: &mut Window, _cx: &App) {}
+    pub fn focus_input(&self, window: &mut Window, cx: &App) {
+        if self.tool_id == ids::UUID && self.uuid_version.needs_name() {
+            self.uuid_name.read(cx).focus(window);
+        }
+    }
 
-    /// Generators ignore pasted source text (options chips drive length/etc.).
-    pub fn set_input_text(&mut self, _text: &str, _window: &mut Window, cx: &mut Context<Self>) {
+    pub fn set_input_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tool_id == ids::UUID && self.uuid_version.needs_name() {
+            self.uuid_name.update(cx, |field, cx| {
+                field.set_input(text, cx);
+                field.focus(window);
+            });
+        }
         self.notice = "";
         cx.notify();
     }
 
-    pub fn set_tool(&mut self, tool_id: &'static str, _window: &mut Window, cx: &mut Context<Self>) {
+    pub fn set_tool(&mut self, tool_id: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         if self.tool_id != tool_id {
             self.tool_id = tool_id;
             self.output_text = None;
             self.error = None;
             self.notice = "";
+            self.quantity = 1;
             self.output
                 .update(cx, |field, cx| field.set_output("", cx));
         }
+        self.focus_input(window, cx);
         cx.notify();
     }
 
+    fn name_params(&self, cx: &App) -> NameParams {
+        NameParams {
+            namespace: self.uuid_namespace,
+            custom_namespace: self.uuid_custom_ns.read(cx).buffer.text().to_owned(),
+            name: self.uuid_name.read(cx).buffer.text().to_owned(),
+        }
+    }
+
     fn execute(&mut self, cx: &mut Context<Self>) {
-        match run_generate(self.tool_id, self) {
+        match run_generate(self.tool_id, self, cx) {
             Ok(output) => {
                 self.output_text = Some(output.clone());
                 self.error = None;
@@ -98,12 +139,34 @@ impl TransformWorkbench {
 
     fn title(&self) -> (&'static str, &'static str) {
         match self.tool_id {
-            ids::UUID => ("UUID", "v4 随机 · 可选 v7"),
-            ids::ULID => ("ULID", "时间有序 · 点击生成"),
-            ids::TOKEN => ("Token", "随机令牌 · 点击生成"),
-            ids::LOREM => ("Lorem ipsum", "占位段落 · 点击生成"),
+            ids::UUID => ("UUID", "v1 / v3–v7 · 可设数量"),
+            ids::ULID => ("ULID", "时间有序 · 可设数量"),
+            ids::TOKEN => ("Token", "随机令牌 · 可设数量"),
+            ids::LOREM => ("Lorem ipsum", "占位段落 · 可设份数"),
             _ => ("工具", "离线"),
         }
+    }
+
+    fn quantity_chips(&self, cx: &mut Context<Self>) -> Div {
+        let theme = Theme::get(cx);
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(div().text_xs().text_color(theme.muted).child("数量"));
+        for n in quantity::CHOICES {
+            let n = *n;
+            let active = self.quantity == n;
+            let id = format!("qty-{n}");
+            row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.quantity = n;
+                    cx.notify();
+                },
+            )));
+        }
+        row
     }
 
     fn options_bar(&self, cx: &mut Context<Self>) -> Div {
@@ -114,10 +177,7 @@ impl TransformWorkbench {
                 row = row.child(div().text_xs().text_color(theme.muted).child("版本"));
                 for version in UuidVersion::ALL {
                     let active = self.uuid_version == version;
-                    let id = match version {
-                        UuidVersion::V4 => "uuid-v4",
-                        UuidVersion::V7 => "uuid-v7",
-                    };
+                    let id = format!("uuid-{}", version.label());
                     row = row.child(chip(theme, id, version.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.uuid_version = version;
@@ -166,6 +226,7 @@ impl TransformWorkbench {
             ids::ULID => {}
             _ => {}
         }
+        row = row.child(self.quantity_chips(cx));
         row = row
             .child(
                 primary_button(theme, "generate", "生成")
@@ -185,17 +246,74 @@ impl TransformWorkbench {
             );
         row
     }
+
+    fn uuid_name_strip(&self, cx: &mut Context<Self>) -> Option<Div> {
+        if self.tool_id != ids::UUID || !self.uuid_version.needs_name() {
+            return None;
+        }
+        let theme = Theme::get(cx);
+        let mut ns_row = div().flex().flex_wrap().items_center().gap_2().child(
+            div()
+                .text_xs()
+                .text_color(theme.muted)
+                .child("命名空间"),
+        );
+        for kind in NamespaceKind::ALL {
+            let active = self.uuid_namespace == kind;
+            let id = format!("uuid-ns-{}", kind.label());
+            ns_row = ns_row.child(chip(theme, id, kind.label(), active).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.uuid_namespace = kind;
+                    cx.notify();
+                },
+            )));
+        }
+        let mut strip = div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(ns_row)
+            .child(
+                div()
+                    .h(px(36.))
+                    .min_w_0()
+                    .child(self.uuid_name.clone()),
+            );
+        if self.uuid_namespace == NamespaceKind::Custom {
+            strip = strip.child(
+                div()
+                    .h(px(36.))
+                    .min_w_0()
+                    .child(self.uuid_custom_ns.clone()),
+            );
+        }
+        Some(strip)
+    }
 }
 
-fn run_generate(tool_id: &str, state: &TransformWorkbench) -> Result<String, String> {
+fn run_generate(
+    tool_id: &str,
+    state: &TransformWorkbench,
+    cx: &App,
+) -> Result<String, String> {
+    let qty = state.quantity;
     match tool_id {
-        ids::UUID => Ok(uuid_tool::generate(state.uuid_version)),
-        ids::ULID => Ok(ulid_tool::generate()),
-        ids::TOKEN => Ok(token_gen::generate(
+        ids::UUID => {
+            let params = state.name_params(cx);
+            let name = if state.uuid_version.needs_name() {
+                Some(&params)
+            } else {
+                None
+            };
+            uuid_tool::generate_many(state.uuid_version, qty, name)
+        }
+        ids::ULID => Ok(ulid_tool::generate_many(qty)),
+        ids::TOKEN => Ok(token_gen::generate_many(
             state.token_length,
             state.token_alphabet,
+            qty,
         )),
-        ids::LOREM => Ok(lorem::generate(state.lorem_paragraphs)),
+        ids::LOREM => Ok(lorem::generate_many(state.lorem_paragraphs, qty)),
         _ => Err("此工具没有该操作".into()),
     }
 }
@@ -230,6 +348,7 @@ impl Render for TransformWorkbench {
                     }),
             )
             .child(self.options_bar(cx))
+            .children(self.uuid_name_strip(cx))
             .when_some(self.error.as_ref(), |view, error| {
                 view.child(crate::ui::banner(theme, StatusKind::Error, error.clone()))
             })

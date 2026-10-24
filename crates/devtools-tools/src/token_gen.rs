@@ -1,5 +1,6 @@
 //! Random token generator (explicit generate).
 
+use crate::quantity;
 use uuid::Uuid;
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
@@ -36,11 +37,19 @@ pub fn meta() -> ToolMeta {
         id: ids::TOKEN,
         name: "Token",
         category: Category::Generators,
-        summary: "生成随机令牌。可选长度与字母表；点击生成。",
+        summary: "生成随机令牌。可选长度、字母表与数量。",
         keywords: &["token", "random", "secret", "令牌", "随机"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+pub fn generate_many(length: usize, alphabet: Alphabet, qty: usize) -> String {
+    let n = quantity::clamp(qty);
+    (0..n)
+        .map(|_| generate(length, alphabet))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub fn generate(length: usize, alphabet: Alphabet) -> String {
@@ -76,5 +85,10 @@ mod tests {
         assert_eq!(t.len(), 32);
         assert!(t.bytes().all(|b| b.is_ascii_hexdigit()));
         assert_ne!(t, generate(32, Alphabet::Hex));
+    }
+
+    #[test]
+    fn generate_many_count() {
+        assert_eq!(generate_many(8, Alphabet::Digits, 5).lines().count(), 5);
     }
 }

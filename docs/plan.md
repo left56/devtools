@@ -89,7 +89,7 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - `url-encode`：`BatchWorkbench` — 编码+解码批量；含 `%` 时优先解码。
   - `html-escape`：`BatchWorkbench` — 转义+反转义批量。
   - `hash`：`BatchWorkbench` — 一次给出 MD5/SHA-1/SHA-256/SHA-384/SHA-512；弱算法在行标题标注。
-  - `uuid`：v4 与可选 v7（`uuid` crate，不自写 RNG）。
+  - `uuid`：v1 / v3 / v4 / v5 / v6 / v7（无 v2：`uuid` 1.11 未提供 DCE Security）；v3/v5 需命名空间+名称；可设「数量」。
   - `timestamp`（显示名 Date-time）：自动识别 Unix 秒/毫秒、ISO、常见日期；默认填入当前本机时间；批量输出本机/ISO/RFC/Unix/Mongo/Excel 等（`BatchWorkbench`）。
   - `number-base`：同时显示 2/8/10/16；可识别 `0x`/`0b`/`0o`（`BatchWorkbench`）。
   - 新增（it-tools 第一批）：`ulid`、`slugify`、`lorem`、`text-stats`、`roman`、`percentage`、`chmod`、`binary`、`color`。
@@ -100,7 +100,8 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
 - **UI 视觉打磨**：明/暗双色板（`Theme::light` / `Theme::dark`），经 `WindowAppearance` + `observe_window_appearance` 跟随系统；`DEVTOOLS_FORCE_THEME=light|dark` 仅用于截图验收。侧栏每工具独立字形图标（`icons.rs`），分类标签用 `faint`、不可折叠。Linux Xvfb 无 portal 时默认偏 Light；截图见 `/workspace/devtools-linux-verify-theme/`。
-- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem`；选项芯片 +「生成」+ 全宽结果，**无原文栏**。Batch 侧纯生成（ULA/MAC/端口/RSA/BIP39）同样隐藏输入栏；BIP39 另有紧凑「助记词」校验条。QR/Wi‑Fi/SVG 保留正确标签的输入。
+- 纯生成工具支持「数量」芯片（1/5/10/20/50，上限 100；RSA 上限 5）：多值一行一个，复制结果即全部。
+- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem`；版本/段落/长度芯片 +「数量」+「生成」+ 全宽结果，**无原文栏**（v3/v5 仅紧凑名称条）。Batch 侧纯生成（ULA/MAC/端口/RSA/BIP39）同样隐藏输入栏；BIP39 另有紧凑「助记词」校验条。QR/Wi‑Fi/SVG 保留正确标签的输入。
 - 生成类工具（UUID/ULID/Token/Lorem、IPv6 ULA/MAC/端口/RSA/BIP39）= 选项芯片 +「生成」+ 结果，**无原文/输入源栏**。QR/Wi‑Fi QR/SVG 等需载荷的工具保留标注正确的输入区（文本/SSID/尺寸），不是假「原文」。
 - **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
 - **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。

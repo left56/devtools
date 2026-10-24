@@ -2,6 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::quantity;
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 use uuid::Uuid;
 
@@ -12,11 +13,17 @@ pub fn meta() -> ToolMeta {
         id: ids::ULID,
         name: "ULID",
         category: Category::Generators,
-        summary: "生成 ULID（时间有序、Crockford Base32）。点击生成，不自动产生。",
+        summary: "生成 ULID（时间有序、Crockford Base32）。可设数量。",
         keywords: &["ulid", "id", "生成", "sortable"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+/// Generate `qty` ULIDs (clamped), one per line.
+pub fn generate_many(qty: usize) -> String {
+    let n = quantity::clamp(qty);
+    (0..n).map(|_| generate()).collect::<Vec<_>>().join("\n")
 }
 
 /// Generate a new ULID string (26 Crockford characters).
@@ -64,6 +71,11 @@ mod tests {
         assert_eq!(id.len(), 26);
         assert!(id.bytes().all(|b| CROCKFORD.contains(&b)));
         assert_ne!(id, generate());
+    }
+
+    #[test]
+    fn generate_many_count() {
+        assert_eq!(generate_many(5).lines().count(), 5);
     }
 
     #[test]
