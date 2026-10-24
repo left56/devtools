@@ -38,12 +38,18 @@ actions!(
         Paste,
         Undo,
         InsertNewline,
+        PrimaryRun,
+        ReadClipboard,
+        InsertClipboard,
+        ToggleFavorite,
     ]
 );
 
 pub fn bind(cx: &mut App) {
     let text = Some("Editor || LineField");
-    cx.bind_keys([
+    // Primary modifier: `cmd` on macOS. On Linux/Windows GPUI still accepts
+    // `cmd` as Super in some paths, but users expect Ctrl — bind both.
+    let mut keys = vec![
         KeyBinding::new("up", TreeUp, Some("JsonTree")),
         KeyBinding::new("down", TreeDown, Some("JsonTree")),
         KeyBinding::new("left", TreeLeft, Some("JsonTree")),
@@ -51,30 +57,44 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("enter", TreeFocus, Some("JsonTree")),
         KeyBinding::new("escape", TreeRoot, Some("JsonTree")),
         KeyBinding::new("cmd-c", Copy, Some("JsonTree")),
+        KeyBinding::new("ctrl-c", Copy, Some("JsonTree")),
         KeyBinding::new("cmd-b", ToggleSidebar, None),
+        KeyBinding::new("ctrl-b", ToggleSidebar, None),
         KeyBinding::new("ctrl-cmd-f", ToggleFullscreen, None),
+        KeyBinding::new("f11", ToggleFullscreen, None),
         KeyBinding::new("cmd-m", MinimizeWindow, None),
         KeyBinding::new("cmd-w", CloseWindow, None),
+        KeyBinding::new("ctrl-w", CloseWindow, None),
         KeyBinding::new("cmd-k", TogglePalette, None),
+        KeyBinding::new("ctrl-k", TogglePalette, None),
         KeyBinding::new("left", Left, text),
         KeyBinding::new("right", Right, text),
         KeyBinding::new("shift-left", SelectLeft, text),
         KeyBinding::new("shift-right", SelectRight, text),
         KeyBinding::new("cmd-left", Home, text),
+        KeyBinding::new("ctrl-left", Home, text),
         KeyBinding::new("cmd-right", End, text),
+        KeyBinding::new("ctrl-right", End, text),
         KeyBinding::new("home", Home, text),
         KeyBinding::new("end", End, text),
         KeyBinding::new("shift-cmd-left", SelectHome, text),
+        KeyBinding::new("shift-ctrl-left", SelectHome, text),
         KeyBinding::new("shift-cmd-right", SelectEnd, text),
+        KeyBinding::new("shift-ctrl-right", SelectEnd, text),
         KeyBinding::new("shift-home", SelectHome, text),
         KeyBinding::new("shift-end", SelectEnd, text),
         KeyBinding::new("backspace", Backspace, text),
         KeyBinding::new("delete", Delete, text),
         KeyBinding::new("cmd-a", SelectAll, text),
+        KeyBinding::new("ctrl-a", SelectAll, text),
         KeyBinding::new("cmd-c", Copy, text),
+        KeyBinding::new("ctrl-c", Copy, text),
         KeyBinding::new("cmd-x", Cut, text),
+        KeyBinding::new("ctrl-x", Cut, text),
         KeyBinding::new("cmd-v", Paste, text),
+        KeyBinding::new("ctrl-v", Paste, text),
         KeyBinding::new("cmd-z", Undo, text),
+        KeyBinding::new("ctrl-z", Undo, text),
         KeyBinding::new("enter", InsertNewline, Some("Editor")),
         KeyBinding::new("up", Up, Some("Editor")),
         KeyBinding::new("down", Down, Some("Editor")),
@@ -84,5 +104,15 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("down", PaletteDown, Some("CommandPalette")),
         KeyBinding::new("enter", PaletteConfirm, Some("CommandPalette")),
         KeyBinding::new("escape", PaletteClose, Some("CommandPalette")),
-    ]);
+        KeyBinding::new("ctrl-enter", PrimaryRun, None),
+        KeyBinding::new("cmd-enter", PrimaryRun, None),
+        // One-shot paste into current input (never background watch).
+        KeyBinding::new("ctrl-shift-v", ReadClipboard, None),
+        KeyBinding::new("cmd-shift-v", ReadClipboard, None),
+        KeyBinding::new("ctrl-shift-i", InsertClipboard, None),
+        KeyBinding::new("cmd-shift-i", InsertClipboard, None),
+        KeyBinding::new("ctrl-shift-f", ToggleFavorite, None),
+        KeyBinding::new("cmd-shift-f", ToggleFavorite, None),
+    ];
+    cx.bind_keys(keys.drain(..));
 }

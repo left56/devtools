@@ -1,0 +1,140 @@
+# Linux x86_64（X11）验证记录
+
+日期：2026-10-23（Asia/Shanghai）  
+主机：无独显 Linux 盒子，`DISPLAY=:2`（Xvfb），Vulkan 走 Mesa lavapipe。
+
+## 怎么跑
+
+```bash
+# 系统依赖（Debian/Ubuntu）
+sudo apt-get install -y \
+  build-essential pkg-config \
+  libxkbcommon-dev libxkbcommon-x11-dev \
+  libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb-keysyms1-dev libxcb-randr0-dev libxcb-image0-dev \
+  libxcb-util-dev libxcb-icccm4-dev \
+  libfontconfig1-dev libfreetype6-dev \
+  libegl-dev libvulkan-dev mesa-vulkan-drivers \
+  imagemagick xdotool x11-utils
+
+export DISPLAY=:2
+export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+export LIBGL_ALWAYS_SOFTWARE=1
+
+cargo test --workspace --all-targets
+cargo clippy -p devtools-core -p devtools-tools -p devtools --all-targets -- -D warnings
+cargo run -p devtools
+```
+
+`gpui` 在 Linux 上开 `x11` feature（见 `crates/devtools/Cargo.toml`）。Wayland 未在本机验收。
+
+`xattr` 0.2 与新版 `libc` 的 `ENOATTR` 冲突用仓库内 `patches/xattr-0.2.3` 修补（ENODATA）。
+
+## 已点验
+
+截图在 `/workspace/devtools-linux-verify/`（本机验证产物，未进 git）。
+
+| 场景 | 结果 |
+| --- | --- |
+| 窗口启动、侧边栏分类、Ctrl+K 面板 | 通过 |
+| JSON 输入 + 点击「格式化」→ 树保留键顺序 | 通过（`04-json-after-format-clicks.png`） |
+| Base64 `hello world` → `aGVsbG8gd29ybGQ=`（Ctrl+Enter） | 通过（`50-base64-ctrlenter.png`） |
+| Hash SHA-256 `abc` → NIST 向量（Ctrl+Enter） | 通过（`51-hash-ctrlenter.png`） |
+| UUID v4 生成（Ctrl+Enter） | 通过（`52-uuid-ctrlenter.png`） |
+| Timestamp `1700000000` → 本机时区日期时间（Ctrl+Enter） | 通过（`53-ts-ctrlenter.png`） |
+
+变换类工具的主操作也可用 **Ctrl+Enter**（macOS 上为 Cmd+Enter）。侧边栏鼠标点选与 JSON「格式化」点击正常；变换工具顶栏按钮在 Xvfb + xdotool 下命中不稳定，以快捷键验收为准，真机鼠标仍建议再点一次。
+
+## 相对 macOS 仍保留的差异
+
+- 普通装饰标题栏（无透明融合 / 无 traffic lights）
+- 快捷键提示写 Ctrl，并同时绑定 Cmd 别名
+- 未开 `wayland`；未做签名 / `.app` 包
+
+
+## M3 检查器点验（同日）
+
+截图在 `/workspace/devtools-linux-verify-m3/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| JWT `alg:none` + 过期 `exp` → 未验签警告、`alg` 原文、`exp` 时间+已过期，header/payload/签名三栏 | 通过（`final-jwt-alg-none-expired.png`） |
+| Regex 匹配/捕获组（标明 Rust regex，不是 PCRE）；可选替换 | 通过（`final-regex.png`） |
+| Cron 5 段 → 之后 5 次；「本机时区」与「UTC」标注可切换 | 通过（`final-cron-local.png` / `final-cron-utc.png`） |
+| URL Parse 拆分各段与 query（无网络） | 通过（`final-url-parse.png`） |
+| Diff 行级插入/删除高亮（无外部进程） | 通过（`final-diff.png`） |
+
+导航以 **Ctrl+K 命令面板** + **Ctrl+Enter 运行** 为主（与 M2 相同）；Regex/Diff 多输入框辅以鼠标点击切换字段。侧边栏「安全 / 网络」分类需下滚才看到 JWT、Hash、URL Parse。
+
+
+## UI 视觉打磨（同日稍后）
+
+截图在 `/workspace/devtools-linux-verify-ui/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+改动摘要：
+
+- 暗色主题分层：`bg` / `sidebar` / `panel` / `elevated`，独立 success / warning / error。
+- 主按钮（运行 / 格式化 / 编码）用 accent 实心；清空 / 复制为次级描边按钮；状态用小 chip。
+- 窗格标题高度约 36px，工作台内边距更紧。
+- **JWT**：Token 顶栏压缩；Header / Payload / Signature 改为内容高度堆叠卡片；警告为紧凑 banner。
+- **Diff**：原文/新文本并排在上（约 30% 高），全宽 Diff 结果在下；`+n` / `-m` 摘要 chip。
+- **URL Parse**：统一 KV 行（固定标签宽 + mono 值盒）；空的 username/password/fragment 省略；Query Params 独立分区。
+- 侧边栏选中行与搜索框跟新 chrome 对齐。
+
+点验：Ctrl+K 切工具 + Ctrl+Enter 运行（与 M3 相同）。macOS Metal 本轮未测。
+
+
+## M4 效率点验（同日稍后）
+
+截图在 `/workspace/devtools-linux-verify-m4/`（本机验证产物，未进 git）。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| 顶栏「读取剪贴板」+ `Ctrl+Shift+V` 读一次（无后台监听文案） | 通过（`final-clipboard-suggest.png`） |
+| 建议条：JSON / JWT 高置信；点击只切换、不改输入；「插入到输入」才写入 | 通过 |
+| 命令面板空查询置顶「最近使用」 | 通过（`final-palette-recents.png`） |
+| 收藏：`Ctrl+Shift+F` / 侧边栏 ★；侧栏出现「★ 收藏」分区 | 通过（`final-favorite.png`） |
+| `prefs.json` 只含工具 id / `used_at` / favorites（无输入输出） | 通过（`$XDG_DATA_HOME/devtools/prefs.json`） |
+
+数据目录（Linux）：`$XDG_DATA_HOME/devtools`，否则 `~/.local/share/devtools`。
+
+## M5 联网工具点验（同日）
+
+截图在 `/workspace/devtools-linux-verify-m5/`。推荐看 `final-*.png`。
+
+| 场景 | 结果 |
+| --- | --- |
+| HTTP Request 打开即见「会访问网络」横幅；URL 填写后不自动请求 | 通过（`final-http-banner.png`） |
+| 显式运行 `https://example.com/` → `200 OK` + 响应头 | 通过（`final-http-run.png`） |
+| DNS Lookup 打开不查询；运行 `localhost` → `127.0.0.1` / `::1` | 通过（`final-dns.png`） |
+| prefs 仍只有工具 id（无 URL / 响应体） | 通过 |
+
+依赖：`ureq`（HTTP）、`dns-lookup`（系统 A/AAAA）。证书解码 / CSV / SQL 未做。macOS Metal 本轮未测。
+
+
+## UX2（2026-10-23）
+
+去掉顶栏剪贴板条；输入框「粘贴」；轻量工具实时运行。截图：`/workspace/devtools-linux-verify-ux2/`（Regex 模式+替换置顶可见、Base64 输入即编码、Ctrl+Shift+V 粘贴、HTTP 仍有「运行」+ 联网横幅）。
+
+
+## 明暗主题与侧栏图标（2026-10-24）
+
+- `Theme::light` / `Theme::dark`；`Theme::for_appearance(window.appearance())` + `observe_window_appearance`。
+- Linux X11：GPUI 初始常为 Light；有 xdg-desktop-portal 时随 `color-scheme` 更新。裸 Xvfb 无 portal → 默认 Light。验收可用 `DEVTOOLS_FORCE_THEME=dark|light` 强制色板（不进 prefs）。
+- 侧栏：分类不可折叠，标签用 `theme.faint`；每工具独立字形（`{}` / `64` / `%` / `<>` / `#` / `◈` / `◷` / `0x` / `Aa` / `◉` / `.*` / `⟳` / `◎` / `±` / `↗` / `⌖`），分类淡色 tint。
+- 截图：`/workspace/devtools-linux-verify-theme/final-light-sidebar.png`、`final-dark-sidebar.png`、`final-*-sidebar-crop.png`。
+
+
+## Refactoring UI 重设计（2026-10-24）
+
+按 Refactoring UI（casual + reserved）重做主题 token 与 chrome。截图：`/workspace/devtools-linux-verify-rui/`。
+
+| 场景 | 文件 |
+| --- | --- |
+| 浅色侧栏 + JSON | `final-light-sidebar.png` / `final-light-sidebar-crop.png` |
+| 深色侧栏 + JSON | `final-dark-sidebar.png` / `final-dark-sidebar-crop.png` |
+| 浅色 Base64 实时 | `final-light-base64.png` |
+| 深色 Regex | `final-dark-regex.png` |
+| HTTP 联网横幅 | `final-http-banner.png` |
+
+强制色板：`DEVTOOLS_FORCE_THEME=light|dark`（裸 Xvfb 无 portal 时默认 Light）。

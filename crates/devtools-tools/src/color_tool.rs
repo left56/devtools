@@ -1,0 +1,174 @@
+//! Color converter: hex ↔ rgb ↔ hsl.
+
+use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
+
+pub fn meta() -> ToolMeta {
+    ToolMeta {
+        id: ids::COLOR,
+        name: "Color converter",
+        category: Category::Data,
+        summary: "颜色互转：#hex、rgb()、hsl()。自动识别，批量输出。",
+        keywords: &["color", "hex", "rgb", "hsl", "颜色"],
+        network: NetworkUse::Offline,
+        availability: Availability::Ready,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let rgb = parse(input)?;
+    let (h, s, l) = rgb_to_hsl(rgb);
+    Ok(vec![
+        ("HEX", format!("#{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b)),
+        ("hex", format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b)),
+        ("RGB", format!("rgb({}, {}, {})", rgb.r, rgb.g, rgb.b)),
+        ("HSL", format!("hsl({}, {}%, {}%)", h.round() as i32, (s * 100.0).round() as i32, (l * 100.0).round() as i32)),
+        ("R", rgb.r.to_string()),
+        ("G", rgb.g.to_string()),
+        ("B", rgb.b.to_string()),
+    ])
+}
+
+fn parse(input: &str) -> Result<Rgb, String> {
+    let t = input.trim();
+    if t.is_empty() {
+        return Err("输入为空".into());
+    }
+    if let Some(rgb) = parse_hex(t) {
+        return Ok(rgb);
+    }
+    if let Some(rgb) = parse_rgb_fn(t) {
+        return Ok(rgb);
+    }
+    if let Some(rgb) = parse_hsl_fn(t) {
+        return Ok(rgb);
+    }
+    Err("无法识别：支持 #RGB/#RRGGBB、rgb(r,g,b)、hsl(h,s%,l%)".into())
+}
+
+fn parse_hex(t: &str) -> Option<Rgb> {
+    let s = t.strip_prefix('#').unwrap_or(t);
+    let full = match s.len() {
+        3 => {
+            let b = s.as_bytes();
+            format!(
+                "{0}{0}{1}{1}{2}{2}",
+                b[0] as char, b[1] as char, b[2] as char
+            )
+        }
+        6 => s.to_string(),
+        _ => return None,
+    };
+    if !full.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let n = u32::from_str_radix(&full, 16).ok()?;
+    Some(Rgb {
+        r: ((n >> 16) & 0xFF) as u8,
+        g: ((n >> 8) & 0xFF) as u8,
+        b: (n & 0xFF) as u8,
+    })
+}
+
+fn parse_rgb_fn(t: &str) -> Option<Rgb> {
+    let lower = t.to_ascii_lowercase();
+    let inner = lower.strip_prefix("rgb(")?.strip_suffix(')')?;
+    let parts: Vec<_> = inner.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    Some(Rgb {
+        r: parts[0].parse().ok()?,
+        g: parts[1].parse().ok()?,
+        b: parts[2].parse().ok()?,
+    })
+}
+
+fn parse_hsl_fn(t: &str) -> Option<Rgb> {
+    let lower = t.to_ascii_lowercase();
+    let inner = lower.strip_prefix("hsl(")?.strip_suffix(')')?;
+    let parts: Vec<_> = inner.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let h: f64 = parts[0].parse().ok()?;
+    let s: f64 = parts[1].trim_end_matches('%').parse().ok()?;
+    let l: f64 = parts[2].trim_end_matches('%').parse().ok()?;
+    Some(hsl_to_rgb(h, s / 100.0, l / 100.0))
+}
+
+fn rgb_to_hsl(rgb: Rgb) -> (f64, f64, f64) {
+    let r = f64::from(rgb.r) / 255.0;
+    let g = f64::from(rgb.g) / 255.0;
+    let b = f64::from(rgb.b) / 255.0;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+    if (max - min).abs() < f64::EPSILON {
+        return (0.0, 0.0, l);
+    }
+    let d = max - min;
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
+    let h = if (max - r).abs() < f64::EPSILON {
+        (g - b) / d + if g < b { 6.0 } else { 0.0 }
+    } else if (max - g).abs() < f64::EPSILON {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    (h * 60.0, s, l)
+}
+
+fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Rgb {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let h_prime = (h % 360.0) / 60.0;
+    let x = c * (1.0 - (h_prime % 2.0 - 1.0).abs());
+    let (r1, g1, b1) = match h_prime as i32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    Rgb {
+        r: ((r1 + m) * 255.0).round().clamp(0.0, 255.0) as u8,
+        g: ((g1 + m) * 255.0).round().clamp(0.0, 255.0) as u8,
+        b: ((b1 + m) * 255.0).round().clamp(0.0, 255.0) as u8,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hex_round() {
+        let rows = convert_all("#336699").unwrap();
+        assert_eq!(rows[0].1, "#336699");
+        assert_eq!(rows[2].1, "rgb(51, 102, 153)");
+    }
+
+    #[test]
+    fn rgb_input() {
+        let rows = convert_all("rgb(255, 0, 0)").unwrap();
+        assert_eq!(rows[1].1, "#ff0000");
+    }
+
+    #[test]
+    fn short_hex() {
+        let rows = convert_all("#f00").unwrap();
+        assert_eq!(rows[0].1, "#FF0000");
+    }
+}

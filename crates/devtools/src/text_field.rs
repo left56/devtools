@@ -5,6 +5,11 @@ use std::ops::Range;
 
 const LINE_HEIGHT: f32 = 24.;
 
+/// GPUI panics if a shaped text run contains `\n` / `\r`.
+fn flatten_text_run(text: &str) -> SharedString {
+    crate::ui::single_line(text)
+}
+
 pub struct Edited;
 impl EventEmitter<Edited> for TextField {}
 
@@ -41,7 +46,7 @@ impl TextField {
             buffer: Buffer::new(multiline),
             multiline,
             read_only,
-            placeholder: placeholder.into(),
+            placeholder: flatten_text_run(placeholder),
             scroll: ScrollHandle::new(),
             layouts: Vec::new(),
             selecting: false,
@@ -53,10 +58,39 @@ impl TextField {
         self.focus.focus(window);
     }
     pub fn set_output(&mut self, text: &str, cx: &mut Context<Self>) {
-        self.buffer.set_text(text);
+        self.buffer.set_text_normalized(text);
         self.scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
     }
+    /// Replace the whole buffer (editable). Emits [`Edited`].
+    pub fn set_input(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.read_only {
+            self.set_output(text, cx);
+            return;
+        }
+        self.buffer.select_all();
+        self.edit(None, text, false, None, cx);
+        self.scroll.set_offset(point(px(0.), px(0.)));
+    }
+    pub fn set_placeholder(&mut self, placeholder: &'static str, cx: &mut Context<Self>) {
+        // Placeholders are drawn as a single shaped run — never keep newlines.
+        self.placeholder = flatten_text_run(placeholder);
+        cx.notify();
+    }
+
+    /// Switch between line field and multiline editor. Strips newlines when
+    /// entering single-line mode.
+    pub fn set_multiline(&mut self, multiline: bool, cx: &mut Context<Self>) {
+        if self.multiline == multiline {
+            return;
+        }
+        self.multiline = multiline;
+        self.buffer.set_multiline(multiline);
+        self.preferred_x = None;
+        self.scroll.set_offset(point(px(0.), px(0.)));
+        cx.notify();
+    }
+
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.buffer.select_all();
         self.edit(None, "", false, None, cx);
@@ -320,7 +354,7 @@ impl Element for TextLine {
             len: self.text.len(),
             font: style.font(),
             color: if self.placeholder {
-                Theme::dark().muted.into()
+                Theme::get(cx).muted.into()
             } else {
                 style.color
             },
@@ -383,6 +417,7 @@ impl Element for TextLine {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let theme = Theme::get(cx);
         self.field.update(cx, |field, _| {
             let end = self.start + if self.placeholder { 0 } else { self.text.len() };
             let selection = field.buffer.selection();
@@ -398,7 +433,7 @@ impl Element for TextLine {
                         point(bounds.left() + x, bounds.top()),
                         size(px(2.), px(LINE_HEIGHT)),
                     ),
-                    Theme::dark().accent,
+                    theme.accent,
                 ))
             } else {
                 None
@@ -425,7 +460,7 @@ impl Element for TextLine {
                             point(bounds.left() + left, bounds.top()),
                             point(bounds.left() + right, bounds.bottom()),
                         ),
-                        Theme::dark().selected,
+                        theme.selected,
                     ))
                 } else {
                     None
@@ -509,7 +544,7 @@ impl Element for TextLine {
 
 impl Render for TextField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let mut start = 0;
         let lines: Vec<_> = self
             .buffer
@@ -525,7 +560,8 @@ impl Render for TextField {
                     text: if placeholder {
                         self.placeholder.clone()
                     } else {
-                        text.to_owned().into()
+                        // Defend against \r left in a "line" after a naive split.
+                        flatten_text_run(text)
                     },
                     placeholder,
                 };

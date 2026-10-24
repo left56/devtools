@@ -1,10 +1,28 @@
 # Devtools 研发计划
 
-状态：M0 骨架和 M1 JSON 工作台已落盘；M2 及以后仍是计划。M1 的自动检查和窗口交互验证范围见 [验证记录](m1-validation.md)；后续左右分栏、JSON 树和融合标题栏见 [检查器验证记录](json-inspector-validation.md)。
+状态：M0–M5 已落盘；**it-tools 可行离线工具基本齐（目录约 74）**；含 bcrypt/AES/RSA/BIP39（学习向文案）。Chronometer/相机/PDF 等仍暂缓。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
 产品名 Devtools 是暂名，跟仓库目录一致。最终名字、bundle id 和许可证还没定。
+
+## UI 设计（Refactoring UI）
+
+**转换器 UX 规则**：凡「一种输入 → 多种等价/相关表示」的工具（编解码、进制、大小写、摘要、数据格式互转等）必须用 `BatchWorkbench`：单输入、能自动识别则识别、批量展示全部有用输出、每行复制。不要用 TransformWorkbench 的方向芯片墙。仅随机生成类保留 TransformWorkbench。Date-time 是标杆。
+
+
+人格：**developer tools = casual + reserved**。实现要点：
+
+- 独立明/暗色板（冷灰中性 + 克制蓝 accent），跟随系统外观；不用纯黑/纯白，不用紫色默认。
+- 间距刻度 `theme::space`（4/8/12/16/24/32）、圆角 `theme::radius`（4/6/8）。
+- 共享组件在 `ui.rs`：主按钮 / 次按钮 /「粘贴」**同一固定高度**（28px）与 `text_sm`；安静 chip 可更密；pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
+- 侧栏分类常开、标签淡化；选中态用左侧强调条而非重边框。
+- **BatchWorkbench**：一输入 → 多行标注结果（每行复制）。**转换器统一走此台**（与 Date-time 同设计：能自动识别则识别，批量给出相关输出）。`timestamp` / `base64` / `hash` / `case` / 数据格式 / 颜色 / chmod 等。
+- **单行输入**：语义上只接受单值的转换器（CIDR、IPv4、状态码、MIME、颜色、进制等，见 `is_batch_single_line_tool`）用 **上下布局**（it-tools Date-time）：顶栏单行输入 + 下方「标签 | 单行值 | 复制」列表，不用高多行文本框，也不用大「结果」面板框住；文档/列表/载荷/多字段协议仍用左右多行布局。
+- **依赖告警**：`patches/xattr-0.2.3` 已改 `uint32_t`→`u32`；数学求值用 `fasteval`（去掉 `meval`→`nom` 1.2.4）。剩余 `proc-macro-error2` future-incompat 来自 GPUI→`stacksafe`，等上游，勿本地硬 patch。
+- 行为：轻量工具实时跑；HTTP/DNS/UUID/ULID/Lorem 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
+
+参考技能：https://github.com/jaywilburn/refactoring-ui-skill
 
 ## 目的
 
@@ -43,7 +61,7 @@ Devtools 是一个本机桌面工具箱：
 - 把 JWT 解码说成验签。`alg: none` 永远不能显示成可信。
 - MD5 / SHA-1 当作密码哈希。界面上要写明它们只用于校验和兼容。
 - 后台剪贴板监视、全局常驻状态栏。全局热键单独调研，不放进 M1。
-- HTTP 客户端、DNS、WHOIS、端口扫描。它们是 M5，而且必须标成会访问网络。
+- WHOIS、端口扫描。HTTP / DNS 已在 M5 第一批以 `NetworkUse::Explicit` 落地；端口扫描仍不做。
 - AI 功能。
 
 ## 约束
@@ -56,32 +74,58 @@ Devtools 是一个本机桌面工具箱：
 - GPUI 仍是 pre-1.0。0.2.2 没有官方多行文本框。Zed 的编辑器不在 `gpui` crate 里。M1 必须自己做一个够用的文本输入，这是关键路径。
 - macOS 渲染走 Metal，字形需要 `font-kit` feature。`gpui` 的 default features 会打开 `wayland` 和 `x11`。本仓库在 workspace 依赖里关掉 default features，只开 `font-kit`。不要为了「看起来完整」把 default features 打开。
 - Xcode 27 自带的命令行工具里没有 `metal`。`gpui` 0.2.2 的 `build.rs` 会调用它编译 shader，缺少时报 `cannot execute tool 'metal'`。先执行 `xcodebuild -downloadComponent MetalToolchain`。本机装好后 `xcrun metal` 是 Apple metal 32023.921。
+- 长期目标包含 Windows x86 与 Linux x86。在那两套主机上实际编译通过之前，不把 GPUI default features、数据目录路径或标题栏行为写进跨平台验收。工具 crate 保持无 GPUI、无 `unsafe`。
 - `serde_json` 默认用 `BTreeMap`，对象键会被排序。workspace 依赖打开了 `preserve_order`。这是行为的一部分，不是实现细节。
 
 ## 当前状态
 
-M0 与 M1 已实现，包含 JSON 检查器和窗口布局改进。
+M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X11**（`cargo test --workspace`、`cargo run -p devtools`）。macOS 为下一轮真机适配；Windows x86 更后。
 
 已实现：
 
 - workspace 三 crate：`devtools`、`devtools-core`、`devtools-tools`。
 - `ToolMeta`、固定分类、注册表、搜索。重复 id 会在构造注册表时 panic；空分类隐藏。
 - JSON `prettify` / `minify`：严格解析、保留键顺序。错误行号从 1 开始，列号为 `serde_json` 的字节列号，空输入列号为 0。
-- 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。启动时聚焦空 JSON 输入框。
-- JSON 格式化、压缩、清空、复制结果。运行不改输入；失败移光标并滚到错误行，不增加撤销。清空同时清输入和运行结果。
-- 原文/结果左右分栏，可拖动中间分隔条；JSON 树/只读文本切换。树保留键顺序，支持展开、选择、聚焦子树、返回根；选中节点显示绝对 JSONPath 和 jq 过滤表达式，可分别复制路径、表达式和节点值。路径生成在 tools crate，树交互状态在壳中，均不引用 GPUI。
-- macOS 透明原生标题栏融合暗色内容，保留三色按钮；侧边栏移除副标题及分类筛选按钮，改用分类文件夹。搜索匹配时自动展开文件夹。顶部箭头或 `cmd-b` 可把整个侧边栏收起为 80 逻辑像素窄栏，保留工具、搜索入口及原有工作台和查询状态；展开后恢复完整侧边栏。
-- 继续编辑后保留上次结果并显示待更新提示，重新运行后重建树；压缩后显示文本，格式化后显示树。
-- 侧边栏搜索与 `cmd-k` 面板都调 `Registry::search`，选中工具后保留工作台输入。面板搜索全部工具，不继承侧边栏查询或文件夹折叠状态。
-- `suggest` 纯函数继续保留；M1 不显示建议条，不自动切工具，不后台读取剪贴板。
+- M2 纯函数工具（全部 `NetworkUse::Offline`，界面接好后 `Availability::Ready`）：
+  - `base64`：`BatchWorkbench` — 标准/URL-safe 编码，可解码时一并展示（无方向芯片）。
+  - `url-encode`：`BatchWorkbench` — 编码+解码批量；含 `%` 时优先解码。
+  - `html-escape`：`BatchWorkbench` — 转义+反转义批量。
+  - `hash`：`BatchWorkbench` — 一次给出 MD5/SHA-1/SHA-256/SHA-384/SHA-512；弱算法在行标题标注。
+  - `uuid`：v1 / v3 / v4 / v5 / v6 / v7（无 v2：`uuid` 1.11 未提供 DCE Security）；v3/v5 需命名空间+名称；可设「数量」。
+  - `timestamp`（显示名 Date-time）：自动识别 Unix 秒/毫秒、ISO、常见日期；默认填入当前本机时间；批量输出本机/ISO/RFC/Unix/Mongo/Excel 等（`BatchWorkbench`）。
+  - `number-base`：同时显示 2/8/10/16；可识别 `0x`/`0b`/`0o`（`BatchWorkbench`）。
+  - 新增（it-tools 第一批）：`ulid`、`slugify`、`lorem`、`text-stats`、`roman`、`percentage`、`chmod`、`binary`、`color`。
+  - 新增（it-tools 第二批）：`basic-auth`、`hmac`、`token`、`otp`、`email-norm`、`list-conv`、`json-yaml`、`json-toml`、`sql-format`、`markdown-html`、IPv4×3、`ipv6-ula`、`mac-gen`、`mime`、`http-status`、`ua-parse`、`iban`、`temperature`、`eta`、`numeronym`、`obfuscate`、`nato`、`safelink`、`docker-run`；Hash 增 SHA-384。
+  - 新增（it-tools 第三批）：`xml-tool`、`json-csv`、`yaml-toml`、`json-diff`、`password-strength`、`keycode`、`phone`、`ascii-draw`、`random-port`、`unicode-esc`、`qr-code`、`wifi-qr`、`meta-tags`、`svg-placeholder`、`cron-presets`。Chronometer 暂缓（需计时器 UI）。
+  - 新增（it-tools 收尾批）：`math-eval`、`git-memo`、`regex-memo`、`base64-hex`、`bcrypt`、`encrypt`、`rsa-keygen`、`bip39`。
+  - `case` / `slugify`：`BatchWorkbench` — 一次给出全部风格 / Slug 变体。
+- 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
+- JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
+- **UI 视觉打磨**：明/暗双色板（`Theme::light` / `Theme::dark`），经 `WindowAppearance` + `observe_window_appearance` 跟随系统；`DEVTOOLS_FORCE_THEME=light|dark` 仅用于截图验收。侧栏每工具独立字形图标（`icons.rs`），分类标签用 `faint`、不可折叠。Linux Xvfb 无 portal 时默认偏 Light；截图见 `/workspace/devtools-linux-verify-theme/`。
+- 纯生成工具支持「数量」芯片（1/5/10/20/50，上限 100；RSA 上限 5）：多值一行一个，复制结果即全部。
+- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem`；版本/段落/长度芯片 +「数量」+「生成」+ 全宽结果，**无原文栏**（v3/v5 仅紧凑名称条）。Batch 侧纯生成（ULA/MAC/端口/RSA/BIP39）同样隐藏输入栏；BIP39 另有紧凑「助记词」校验条。QR/Wi‑Fi/SVG 保留正确标签的输入。
+- 生成类工具（UUID/ULID/Token/Lorem、IPv6 ULA/MAC/端口/RSA/BIP39）= 选项芯片 +「生成」+ 结果，**无原文/输入源栏**。QR/Wi‑Fi QR/SVG 等需载荷的工具保留标注正确的输入区（文本/SSID/尺寸），不是假「原文」。
+- **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
+- **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
+- **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。
+- macOS 透明原生标题栏融合内容区；侧边栏分类常开（不折叠）；`cmd-b` 收起整条侧栏；`cmd-k` 命令面板。
+- `suggest` 纯函数：JSON / JWT 结构 / 时间戳 / 标准 Base64。猜中也不自动切换；未注册工具不会出现在 `applicable_suggestions` 里。
 - `cmd-w` 和最后一个窗口关闭时退出。
 
 未实现：
 
-- 收藏、最近使用、建议条、单独的「读取剪贴板」按钮。
-- 除 JSON 以外的工具界面。
-- 打包、签名、菜单栏、全局热键。
+- ~~M3 检查器 / M4 效率 / M5 HTTP+DNS~~（已实现）。
+- M5 后续：证书解码、CSV、SQL 格式化（仍为 P2，未分配 id）。
+- 打包、签名、菜单栏、全局热键、状态栏图标、登录项、后台剪贴板监听。
 - 语法高亮、自动折行、多光标和 redo。
+- macOS 真机点验与签名分发；Linux Wayland；Windows 壳（见下方「跨平台意图」）。
+
+跨平台意图：
+
+- **Linux x86_64 + X11**：已可构建并窗口验收（见 [linux-x11-verification.md](linux-x11-verification.md)）。`gpui` feature 为 `x11`；无独显用 lavapipe。
+- **macOS**：下一轮适配。透明标题栏 / traffic lights 已 `cfg(target_os = "macos")`。仍需 Metal Toolchain 与真机点验。
+- **Windows x86**：更后。`windows-manifest` 仅占位。
+- 工具逻辑保持可移植。`xattr` 0.2 与新 `libc` 的 ENOATTR 问题用 `patches/xattr-0.2.3` 解决。
 
 验收命令：
 
@@ -91,7 +135,23 @@ cargo clippy -p devtools-core -p devtools-tools -p devtools --all-targets -- -D 
 cargo run -p devtools
 ```
 
-2026-10-23：M1 初次验证 21 个单测通过，JSON 检查器迭代后为 26 个，clippy 已通过，已启动窗口并做部分点击/键盘验收；不能据此声称所有系统输入法已通过。完整场景、方法及剩余人工检查见 [M1 验证记录](m1-validation.md)。依赖下载使用临时命令行 registry 参数，没有向仓库写镜像配置，`Cargo.lock` source 仍为 crates.io。
+在只有工具层的环境（无显示服务器 / 非 macOS）至少跑：
+
+```bash
+cargo test -p devtools-core -p devtools-tools --all-targets
+cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
+```
+
+2026-10-23：M2 在 Linux x86_64（rustc stable）上 `devtools-core` 3 + `devtools-tools` 45 个单测通过，两 crate clippy `-D warnings` 通过。壳需在 macOS 上 `cargo run -p devtools` 点验每个新工具的编码/解码/复制与错误展示。
+
+2026-10-23：UI 视觉打磨落盘（主题分层、主/次按钮、JWT 堆叠卡、Diff 上下结构、URL KV）；Xvfb 截图 `/workspace/devtools-linux-verify-ui/`。
+
+2026-10-23：M3 检查器（jwt / regex / cron / url-parse / diff）在 Linux x86_64 落盘并接 `InspectorWorkbench`。`devtools-tools` 单测扩到含 alg:none 与过期 exp；全工作区 `cargo test --workspace`（66 tools 层）与 clippy `-D warnings` 通过；Xvfb + lavapipe 交互截图见 `/workspace/devtools-linux-verify-m3/`。
+
+2026-10-24：侧栏独立图标 + 分类常开淡化 + 明暗主题跟随系统（`observe_window_appearance`）；Xvfb 截图 `/workspace/devtools-linux-verify-theme/`。
+
+2026-10-23：M4 效率 + M5 第一批联网落盘。prefs 只存 id/时间戳/收藏；tools 层 74 个单测；`cargo test --workspace` + clippy `-D warnings` 通过；Xvfb 截图见 `/workspace/devtools-linux-verify-m4/` 与 `/workspace/devtools-linux-verify-m5/`。
+
 
 ## 架构
 
@@ -111,13 +171,13 @@ devtools-core       分类、ToolMeta、注册表、搜索、稳定 id
 - 交互工具的状态放在壳里。例如正则的高亮、HTTP 的请求编辑、JSON 树。它们调用 tools crate 里的纯函数，不把 GPUI 类型传进 tools。
 - 纯文本变换不必上 trait。一个工具一个模块，导出 `meta()` 和具体函数即可。等出现第三种相同形状再抽 trait，不提前抽。
 
-数据流（M1 已实现输入、运行和复制，显式读取与建议条留到 M4）：
+数据流（M1–M5 + UX）：
 
-1. 用户在编辑器里输入，或按一次「读取剪贴板」。
-2. 壳把 `&str` 交给对应函数。
+1. 用户在编辑器里输入，或点输入框「粘贴」/ `Ctrl+Shift+V`（读一次剪贴板写入）。
+2. 轻量工具：壳在输入变化时把 `&str` 交给对应函数（Regex 短防抖）；联网工具等用户点「运行」。
 3. 函数返回结果或带位置的错误。
 4. 壳展示结果。复制也由壳做。
-5. 猜测走 `suggest`。壳只显示「可以打开某某工具」。不替换当前编辑器的内容，不切换当前工具，除非用户确认。
+5. 猜测走 `suggest`。壳只显示建议芯片。不自动切换工具，除非用户确认。
 
 进程内日志以后如果要加，默认不得记录工具输入和输出。当前没有日志依赖。
 
@@ -172,22 +232,33 @@ id 一旦发布给注册表就不要改。显示名可以改。
 | 优先级 | id | 分类 | 阶段 | 行为 |
 | --- | --- | --- | --- | --- |
 | 已实现 | `json` | 数据 | M1 工作台，Ready | 严格格式化、压缩、树形检查与路径。保留键顺序 |
-| P0 | `base64` | 编码 | M2 | 标准 Base64 编解码。URL-safe 做成开关，默认标准 |
-| P0 | `url-encode` | 编码 | M2 | URL 组件编解码，不是整段 URL 解析 |
-| P0 | `html-escape` | 编码 | M2 | HTML 实体转义和反转义 |
-| P0 | `hash` | 安全 | M2 | MD5、SHA-1、SHA-256、SHA-512。见决策 8 |
-| P0 | `uuid` | 生成 | M2 | v4。使用 `uuid` crate 的随机数，不自己写 RNG。v7 可以加，不阻塞 |
-| P0 | `timestamp` | 时间 | M2 | 秒和毫秒互转。时区默认本机，可改成 UTC。不猜测用户所在城市 |
-| P1 | `number-base` | 数据 | M2 或 M3 | 2/8/10/16。非法数字要指出字符位置 |
-| P1 | `case` | 文本 | M2 | snake、camel、kebab、常量。不处理自然语言复数 |
-| P1 | `jwt` | 安全 | M3 | 只解码。验签另说，见决策 7 |
-| P1 | `regex` | 文本 | M3 | Rust `regex` crate 的语法，界面写明不是 PCRE。展示匹配和捕获组 |
-| P1 | `cron` | 时间 | M3 | 5 段 cron。给出之后几次运行时间。时区规则写清楚 |
-| P1 | `url-parse` | 网络 | M3 | 只拆分，不发请求。所以分类虽叫网络，`NetworkUse` 仍是 Offline |
-| P1 | `diff` | 文本 | M3 | 行级 diff。先做纯文本，不做语法高亮 |
-| P2 | HTTP、DNS、证书解码、CSV、SQL 格式化 | — | M5 之后 | 未分配 id。联网工具用 `NetworkUse::Explicit` |
+| 已实现 | `base64` | 编码 | M2，Ready | 标准 Base64 编解码。URL-safe 做成开关，默认标准 |
+| 已实现 | `url-encode` | 编码 | M2，Ready | URL 组件编解码，不是整段 URL 解析 |
+| 已实现 | `html-escape` | 编码 | M2，Ready | HTML 实体转义和反转义 |
+| 已实现 | `hash` | 安全 | M2，Ready | MD5、SHA-1、SHA-256、SHA-512。见决策 8 |
+| 已实现 | `uuid` | 生成 | M2，Ready | v4 + v7。使用 `uuid` crate 的随机数，不自己写 RNG |
+| 已实现 | `timestamp` | 时间 | M2，Ready | **Date-time**：自动识别 + 批量格式（it-tools 风格）。默认当前时间。id 仍为 `timestamp` |
+| 已实现 | `number-base` | 数据 | M2，Ready | 同时显示 2/8/10/16；可识别前缀。非法数字指出位置 |
+| 已实现 | `ulid` | 生成 | it-tools 批，Ready | 显式生成 ULID |
+| 已实现 | `slugify` | 文本 | it-tools 批，Ready | 标题 → URL slug |
+| 已实现 | `lorem` | 生成 | it-tools 批，Ready | 占位段落，显式生成 |
+| 已实现 | `text-stats` | 文本 | it-tools 批，Ready | 字符/词/行/字节 |
+| 已实现 | `roman` | 数据 | it-tools 批，Ready | 罗马数字 ↔ 阿拉伯数字（1–3999） |
+| 已实现 | `percentage` | 数据 | it-tools 批，Ready | 百分比常用算式（两数输入） |
+| 已实现 | `chmod` | 数据 | it-tools 批，Ready | 755 ↔ rwxr-xr-x |
+| 已实现 | `binary` | 编码 | it-tools 批，Ready | 文本 ↔ 二进制/十六进制/码点 |
+| 已实现 | `color` | 数据 | it-tools 批，Ready | #hex ↔ rgb ↔ hsl |
+| 已实现 | `case` | 文本 | M2，Ready | snake、camel、Pascal、kebab、CONSTANT。不处理自然语言复数 |
+| 已实现 | `jwt` | 安全 | M3，Ready | 只解码。`alg` 原文；`alg:none` 标不受信任；可解析的 `exp` 显示时间与是否过期。文案强调未验签，见决策 7 |
+| 已实现 | `regex` | 文本 | M3，Ready | Rust `regex` crate 语法（不是 PCRE）。匹配、捕获组、可选替换；编译错误直接展示 |
+| 已实现 | `cron` | 时间 | M3，Ready | 5 段 cron，之后 5 次运行。时区可选本机或 UTC，界面写明 |
+| 已实现 | `url-parse` | 网络 | M3，Ready | 只拆分，不发请求。`NetworkUse::Offline` |
+| 已实现 | `diff` | 文本 | M3，Ready | 行级插入/删除。纯 Rust（`similar`），不调用外部 diff 进程 |
+| 已实现 | `http-request` | 网络 | M5，Ready | 显式 HTTP。打开不发请求；`NetworkUse::Explicit`；响应不进 prefs |
+| 已实现 | `dns-lookup` | 网络 | M5，Ready | 显式 A/AAAA（系统解析器）。打开不查询；`NetworkUse::Explicit` |
+| P2 | 证书解码、CSV、SQL 格式化 | — | M5 之后 | 未分配 id。保持 Offline 或按需 Explicit |
 
-P2 没有 id，就是为了避免半成品出现在注册表里。
+未注册的工具没有 id，就是为了避免半成品出现在注册表里。
 
 ## 阶段
 
@@ -210,7 +281,7 @@ P2 没有 id，就是为了避免半成品出现在注册表里。
 - 结果区一键复制。复制的是结果，不是再解析一次。
 - 搜索框接到 `Registry::search`。中文「格式化」和英文 `json` 都能找到 JSON。
 - `cmd-k` 打开同一个搜索。选中后切工具。
-- 暗色主题继续用。不做亮色。
+- 明暗主题跟随系统夜间模式（`WindowAppearance`）。Linux 无 xdg-desktop-portal 时 GPUI 常保持 Light。
 
 验收：
 
@@ -234,7 +305,7 @@ M1 不做收藏持久化，不做剪贴板猜测条。
 
 ### M2 纯函数工具
 
-把目录里的 P0 全部接上 M1 的编辑器。P1 里的 `number-base` 和 `case` 如果编辑器已经是通用的，就一起做完。
+已落盘。P0 全部接上通用变换工作台；P1 的 `number-base` 与 `case` 一并完成。
 
 每个工具：
 
@@ -246,42 +317,56 @@ UUID 的测试不断言具体随机值，只断言版本位和可解析。
 
 验收：侧边栏能打开每个 P0 工具，完成一次操作并复制。`cargo test -p devtools-tools` 不需要显示服务器。
 
-### M3 检查器
+### M3 检查器（已完成）
 
-JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块替换文本。
+JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不是整块替换文本）。
 
 - JWT：header / payload / 签名分栏。`alg` 用原文显示。`none` 用明确的警告样式。能解析的 `exp` 显示时间和是否已过期，文案是「未验签」。
 - 正则：模式、被测文本、替换可选。错误来自 `regex` 的编译错误。界面标明 Rust regex 语法。
 - cron：下 5 次运行。写明用的是本机时区还是 UTC。
+- URL Parse：只拆分，不发请求。
 - diff：两块输入，行级插入和删除。不调用外部 `diff` 进程。
 
-验收：每个工具有不启动窗口的测试。JWT 测试里包含 `alg: none` 和一个过期 `exp`，断言结果里没有任何成功或可信字段。
+验收：每个工具有不启动窗口的测试（含 JWT `alg: none` 与过期 `exp`）。Linux x86_64 上 `cargo test --workspace` + clippy `-D warnings` + Xvfb/lavapipe 交互点验通过。
 
-### M4 效率
+### M4 效率（已完成；UX 收紧）
 
-- 「读取剪贴板」按钮和快捷键，读一次，送到当前工具或建议条。
-- 建议条使用 `applicable_suggestions`。点击才切换。切换时如果编辑器非空，要保留内容还是替换，默认保留，由用户把剪贴板内容插入。
-- 最近使用和收藏写入本地 JSON。路径等到实现时定，候选是 `~/Library/Application Support/Devtools/`。文件里只存工具 id 和时间，不存工具输入。
-- 命令面板补最近使用。
+- 输入框「粘贴」+ `Ctrl+Shift+V` / `Cmd+Shift+V`：读一次并写入当前输入（无后台监听）。建议芯片行仅在有检测时出现；点击只切换工具。
+- **实时运行**：变换类（除 UUID 生成）与检查器（JWT / Regex 防抖 / Cron / URL / Diff）及 JSON 格式化在输入时更新；HTTP / DNS 仍显式「运行」。
+- 最近使用和收藏：`prefs.json`，只存工具 id、`used_at`、favorites。路径：Linux `$XDG_DATA_HOME/devtools`（或 `~/.local/share/devtools`）；macOS `~/Library/Application Support/Devtools`。
+- 命令面板空查询时置顶最近使用；侧边栏「★ 收藏」；`Ctrl+Shift+F` 切换收藏。
 
-不做：状态栏图标、登录项、后台监听。
+不做：状态栏图标、登录项、后台监听、全局热键产品化。
 
-全局热键只有在查清 GPUI 0.2.2 或一层很小的 macOS API 之后另开任务。查不清就保持窗口内快捷键，不阻塞发布。
-
-### M5 联网工具
+### M5 联网工具（第一批已完成）
 
 单独阶段，因为信任模型和前面不同。
 
-- 新工具的 `NetworkUse` 用 `Explicit`。界面在运行前显示「会访问网络」，不能只写在关于页。
-- 默认不发请求。打开工具不等于请求。
-- 响应和 URL 不进收藏文件，不进日志。
-- 第一批候选：HTTP 请求、DNS 查询。端口扫描不在候选里。
+- `http-request` / `dns-lookup`：`NetworkUse::Explicit`。界面横幅「会访问网络」；打开 ≠ 请求；只有「运行」/ `Ctrl+Enter` 才联网。
+- 响应和 URL 不进收藏/最近使用文件，不进日志。
+- HTTP：方法芯片 + URL / 头 / 体；`ureq` 阻塞发送。DNS：主机名 → A/AAAA（`dns-lookup` + 系统解析器）。
+- 端口扫描不在范围。证书解码 / CSV / SQL 格式化仍为后续 P2。
 
 ### M6 macOS 分发
 
 - `.app` 包、图标、关于窗口、版本号。
 - 签名和 notarization 取决于还没定的 Apple 账号，不在代码骨架里假装完成。
 - 在 Linux 或 Windows 上实际编译通过之前，不声明跨平台。届时再给 `gpui` 加对应 feature，并在本文改「约束」。
+
+## it-tools 覆盖
+
+对照 [it-tools](https://it-tools.tech/) / `CorentinTh/it-tools`（约 86 个）：
+
+| 状态 | 工具 |
+| --- | --- |
+| 已有（≈74） | 编码/哈希/JWT/OTP/HMAC/bcrypt、AES-GCM 文本加解密、RSA PEM、BIP39、UUID/ULID/Token、Date-time、进制/罗马/百分比/chmod、颜色/温度/ETA、JSON 全家桶（含 YAML/TOML/CSV/XML/diff）、Markdown、SQL 启发式、列表/邮箱/口令强度/遮罩/NATO/ASCII 横幅/Unicode、正则测试+速查、Git 速查、数学求值、IPv4/IPv6/MAC/端口、MIME/HTTP 状态/UA/Safelink/IBAN/电话启发式、QR+Wi‑Fi QR、Meta/SVG 占位、Docker run→Compose、Cron 下次运行+模板、HTTP/DNS 显式联网 |
+| 视为已覆盖 / 不重复 | yaml-viewer ≈ JSON↔YAML 美化结果；hash-text ≈ Hash；integer base ≈ number-base；case/slugify 已有；text-binary + unicode-esc 覆盖码点 |
+| 暂缓及原因 | **Chronometer**：需 GPUI 定时器 UI。**Camera / Device info**：硬件 API。**PDF / PDF signature**：重解析。**html-wysiwyg**：富文本。**Emoji picker**：完整表情包面板。**MAC vendor lookup**：需 OUI 库/联网。**Benchmark builder**：长任务与图表。完整 FIGlet / libphonenumber：体积与数据。 |
+
+安全类（bcrypt / encrypt / rsa / bip39）均 Offline；界面写明学习/调试用途，不把派生口令当高安全 KDF。
+
+设计原则：一输入多结果、每行可复制；随机/密钥类显式「生成」；Linux-first。
+
 
 ## 新增一个工具
 
@@ -313,10 +398,12 @@ JWT、正则、cron、URL 拆分、diff。这些工具的结果不是一整块�
 
 - 最终产品名和 macOS bundle id。没有选定域名之前，窗口不设置 `app_id`。
 - 许可证。仓库 `publish = false`，避免误发到 crates.io。
-- 本地数据目录是否就用 `~/Library/Application Support/Devtools/`。M4 实现前再定。
-- 全局热键和状态栏要不要做。M4 只调研，不承诺。
+- ~~本地数据目录~~：已定（见「当前状态」与 M4）。
+- 全局热键和状态栏要不要做。已调研范围外；不承诺。
 - 亮色主题和英文界面。当前不做。
 
 ## 建议的下一步
 
-先按 M1 验证记录补真实系统 IME 和长文本压力检查。只有确认编辑器稳定后，再单独安排 M2；本轮没有实现 Base64 或 JWT。
+1. 继续按 it-tools 名单补离线纯函数工具（见「it-tools 覆盖」下一批）。
+2. 合并当前 PR 后，在 macOS 真机复验（标题栏融合、触控板/IME、Metal、剪贴板权限）。
+3. M5 后续：证书解码、CSV、SQL 格式化。M6 分发取决于 Apple 账号。

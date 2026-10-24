@@ -186,6 +186,23 @@ impl Buffer {
             false
         }
     }
+    pub fn set_multiline(&mut self, multiline: bool) {
+        if self.multiline == multiline {
+            return;
+        }
+        self.multiline = multiline;
+        if !multiline && self.state.text.chars().any(|c| c == '\n' || c == '\r') {
+            let cleaned = self.state.text.replace(['\r', '\n'], "");
+            let cursor = self.boundary(self.state.cursor.min(cleaned.len()));
+            let anchor = self.boundary(self.state.anchor.min(cleaned.len()));
+            self.state.text = cleaned;
+            self.state.cursor = cursor;
+            self.state.anchor = anchor;
+            self.marked = None;
+            self.composition = None;
+        }
+    }
+
     /// Used only to publish stored output, not for user edits.
     pub fn set_text(&mut self, text: &str) {
         self.state = Snapshot {
@@ -196,6 +213,17 @@ impl Buffer {
         self.marked = None;
         self.composition = None;
         self.undo.clear();
+    }
+
+    /// Like [`set_text`], but normalizes newlines to match this buffer's mode
+    /// so GPUI never shapes a run that still contains `\r` / `\n`.
+    pub fn set_text_normalized(&mut self, text: &str) {
+        let normalized = if self.multiline {
+            text.replace("\r\n", "\n").replace('\r', "\n")
+        } else {
+            text.replace(['\r', '\n'], "")
+        };
+        self.set_text(&normalized);
     }
 }
 
@@ -297,5 +325,20 @@ mod tests {
         assert_eq!(b.cursor_line(), 1);
         b.place_cursor_without_undo(usize::MAX, false);
         assert_eq!(b.line_range(), 7..7);
+    }
+
+    #[test]
+    fn set_multiline_strips_newlines() {
+        let mut b = Buffer::new(true);
+        b.replace(None, "a\nb\rc", false, None);
+        assert_eq!(b.text(), "a\nb\nc");
+        b.set_multiline(false);
+        assert_eq!(b.text(), "abc");
+        b.select_all();
+        b.replace(None, "x\ny", false, None);
+        assert_eq!(b.text(), "xy");
+        b.set_multiline(true);
+        b.replace(None, "\n", false, None);
+        assert_eq!(b.text(), "xy\n");
     }
 }

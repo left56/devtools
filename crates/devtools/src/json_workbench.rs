@@ -4,9 +4,11 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
+    ui::{button, pane, pane_header, pane_title, paste_button, status_chip, workbench_title, StatusKind},
 };
 use devtools_tools::json::{JsonDocument, JsonKind};
-use gpui::{prelude::FluentBuilder, *};
+use gpui::{prelude::FluentBuilder, Timer, *};
+use std::time::Duration;
 
 pub struct JsonWorkbench {
     pub input: Entity<TextField>,
@@ -23,6 +25,7 @@ pub struct JsonWorkbench {
     split: f32,
     pane_width: f32,
     resizing: Option<(Pixels, f32)>,
+    live_gen: u64,
 }
 
 impl JsonWorkbench {
@@ -30,12 +33,12 @@ impl JsonWorkbench {
         let input = cx.new(|cx| TextField::new(true, false, "在这里粘贴 JSON", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
-            cx.notify();
+            this.schedule_live_prettify(cx);
         })
         .detach();
         Self {
             input,
-            output: cx.new(|cx| TextField::new(true, true, "运行后在这里显示结果", cx)),
+            output: cx.new(|cx| TextField::new(true, true, "输入后自动格式化", cx)),
             path: cx.new(|cx| TextField::new(false, true, "", cx)),
             jq: cx.new(|cx| TextField::new(false, true, "", cx)),
             run: JsonRun::default(),
@@ -48,11 +51,81 @@ impl JsonWorkbench {
             split: 0.48,
             pane_width: 1000.,
             resizing: None,
+            live_gen: 0,
         }
     }
     pub fn focus_input(&self, window: &mut Window, cx: &App) {
         self.input.read(cx).focus(window);
     }
+    pub fn set_input_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |field, cx| {
+            field.set_input(text, cx);
+            field.focus(window);
+        });
+        self.notice = "";
+        cx.notify();
+    }
+
+    fn paste_into_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.notice = "剪贴板为空";
+            cx.notify();
+            return;
+        }
+        self.input.update(cx, |field, cx| {
+            field.set_input(&text, cx);
+            field.focus(window);
+        });
+        self.notice = "已粘贴";
+        cx.notify();
+    }
+
+    fn schedule_live_prettify(&mut self, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
+        let generation = self.live_gen;
+        cx.spawn(async move |this, cx| {
+            Timer::after(Duration::from_millis(150)).await;
+            let _ = this.update(cx, |this, cx| {
+                if this.live_gen == generation {
+                    this.live_prettify(cx);
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn live_prettify(&mut self, cx: &mut Context<Self>) {
+        let input = self.input.read(cx).buffer.text().to_owned();
+        if input.trim().is_empty() {
+            self.output.update(cx, |field, cx| field.set_output("", cx));
+            self.run = JsonRun::default();
+            self.last_input = Some(input);
+            self.tree = TreeState::default();
+            self.sync_inspector(cx);
+            cx.notify();
+            return;
+        }
+        // Live always prettifies; 压缩 stays an explicit button.
+        self.run = run_json(&input, JsonAction::Prettify);
+        self.last_input = Some(input);
+        let result = self.run.output.as_deref().unwrap_or("");
+        self.output
+            .update(cx, |field, cx| field.set_output(result, cx));
+        if let Some(doc) = &self.run.document {
+            self.tree.reset(doc);
+        } else {
+            self.tree = TreeState::default();
+        }
+        self.tree_scroll.set_offset(point(px(0.), px(0.)));
+        self.sync_inspector(cx);
+        self.text_view = false;
+        cx.notify();
+    }
+
     fn execute(&mut self, action: JsonAction, window: &mut Window, cx: &mut Context<Self>) {
         let input = self.input.read(cx).buffer.text().to_owned();
         self.run = run_json(&input, action);
@@ -76,6 +149,7 @@ impl JsonWorkbench {
         cx.notify();
     }
     fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.live_gen = self.live_gen.wrapping_add(1);
         self.input.update(cx, |field, cx| {
             field.clear(cx);
             field.focus(window);
@@ -134,7 +208,7 @@ impl JsonWorkbench {
         }
     }
     fn tree_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let Some(doc) = &self.run.document else {
             return div()
                 .flex_1()
@@ -248,15 +322,15 @@ impl JsonWorkbench {
                     .border_b_1()
                     .border_color(theme.border)
                     .child(
-                        button("expand-all", "展开").on_click(cx.listener(|this, _, _, cx| {
+                        button(theme, "expand-all", "展开").on_click(cx.listener(|this, _, _, cx| {
                             this.update_tree(|tree, _| tree.expand_all(), cx)
                         })),
                     )
-                    .child(button("collapse-all", "收起").on_click(cx.listener(
+                    .child(button(theme, "collapse-all", "收起").on_click(cx.listener(
                         |this, _, _, cx| this.update_tree(|tree, doc| tree.collapse_all(doc), cx),
                     )))
                     .when(self.tree.scope != 0, |view| {
-                        view.child(button("tree-root", "返回根").on_click(cx.listener(
+                        view.child(button(theme, "tree-root", "返回根").on_click(cx.listener(
                             |this, _, _, cx| this.update_tree(|tree, _| tree.root(), cx),
                         )))
                     })
@@ -327,14 +401,14 @@ impl JsonWorkbench {
                             )
                             .child(div().flex_1())
                             .when(selected.kind.is_container(), |view| {
-                                view.child(button("focus-node", "聚焦节点").on_click(cx.listener(
+                                view.child(button(theme, "focus-node", "聚焦节点").on_click(cx.listener(
                                     |this, _, _, cx| {
                                         this.update_tree(|tree, doc| tree.focus_selected(doc), cx)
                                     },
                                 )))
                             })
                             .child(
-                                button("copy-value", "复制值")
+                                button(theme, "copy-value", "复制值")
                                     .on_click(cx.listener(|this, _, _, cx| this.copy_value(cx))),
                             ),
                     )
@@ -357,7 +431,7 @@ impl JsonWorkbench {
         is_jq: bool,
         cx: &mut Context<Self>,
     ) -> Div {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         div()
             .flex()
             .items_center()
@@ -383,7 +457,7 @@ impl JsonWorkbench {
                     .child(field),
             )
             .child(
-                button(id, "复制").on_click(cx.listener(move |this, _, _, cx| {
+                button(theme, id, "复制").on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(node) = this
                         .run
                         .document
@@ -407,55 +481,10 @@ impl JsonWorkbench {
     }
 }
 
-pub fn button(id: &'static str, label: &'static str) -> Stateful<Div> {
-    let theme = Theme::dark();
-    div()
-        .id(id)
-        .cursor_pointer()
-        .px_2()
-        .py_1()
-        .rounded_md()
-        .text_sm()
-        .whitespace_nowrap()
-        .bg(theme.selected)
-        .hover(move |s| s.bg(theme.border))
-        .child(label)
-}
-
-fn pane() -> Div {
-    let theme = Theme::dark();
-    div()
-        .h_full()
-        .min_w_0()
-        .min_h_0()
-        .flex()
-        .flex_col()
-        .bg(theme.panel)
-        .rounded_lg()
-        .border_1()
-        .border_color(theme.border)
-        .overflow_hidden()
-}
-fn pane_header() -> Div {
-    let theme = Theme::dark();
-    div()
-        .h(px(48.))
-        .flex_shrink_0()
-        .px_3()
-        .flex()
-        .items_center()
-        .gap_2()
-        .border_b_1()
-        .border_color(theme.border)
-}
 
 impl Render for JsonWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
-        let stale = self
-            .last_input
-            .as_ref()
-            .is_some_and(|last| last != self.input.read(cx).buffer.text());
+        let theme = Theme::get(cx);
         let entity = cx.entity().downgrade();
         div()
             .id("json-workbench")
@@ -464,8 +493,8 @@ impl Render for JsonWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_4()
+            .gap(px(crate::theme::space::MD))
+            .p(px(crate::theme::space::XL))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if let Some((start, split)) = this.resizing {
                     if event.pressed_button == Some(MouseButton::Left) {
@@ -488,7 +517,7 @@ impl Render for JsonWorkbench {
                 cx.listener(|this, _, _, _| this.resizing = None),
             )
             .child(
-                div()
+                workbench_title(theme, "JSON", "离线 · 严格解析 · 保留键顺序")
                     .id("workbench-titlebar")
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
@@ -496,36 +525,13 @@ impl Render for JsonWorkbench {
                             window.titlebar_double_click();
                         }
                     })
-                    .h(px(28.))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(div().text_lg().child("JSON"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child("离线 · 严格解析 · 保留键顺序"),
-                    )
                     .child(div().flex_1())
-                    .child(div().text_xs().text_color(theme.accent).child(self.notice)),
+                    .when(!self.notice.is_empty(), |view| {
+                        view.child(status_chip(theme, self.notice, StatusKind::Accent))
+                    }),
             )
-            .when(stale, |view| {
-                view.child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(0xe5c78b))
-                        .child("输入已更改 · 结果和路径来自上次运行，请重新格式化或压缩"),
-                )
-            })
             .when_some(self.run.error.as_ref(), |view, error| {
-                view.child(
-                    div()
-                        .text_sm()
-                        .text_color(theme.error)
-                        .child(error.to_string()),
-                )
+                view.child(crate::ui::banner(theme, StatusKind::Error, error.to_string()))
             })
             .child(
                 div()
@@ -551,23 +557,32 @@ impl Render for JsonWorkbench {
                         }
                     })
                     .child(
-                        pane()
+                        pane(theme)
                             .w(relative(self.split))
                             .flex_shrink_0()
                             .child(
-                                pane_header()
-                                    .child(div().text_sm().flex_1().child("原文"))
-                                    .child(button("prettify", "格式化").on_click(cx.listener(
-                                        |this, _, window, cx| {
-                                            this.execute(JsonAction::Prettify, window, cx)
-                                        },
-                                    )))
-                                    .child(button("minify", "压缩").on_click(cx.listener(
+                                pane_header(theme)
+                                    .child(pane_title(theme, "原文"))
+                                    .child(
+                                        paste_button(theme, "json-paste").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.paste_into_input(window, cx);
+                                            }),
+                                        ),
+                                    )
+                                    .child(button(theme, "minify", "压缩").on_click(cx.listener(
                                         |this, _, window, cx| {
                                             this.execute(JsonAction::Minify, window, cx)
                                         },
                                     )))
-                                    .child(button("clear", "清空").on_click(
+                                    .child(button(theme, "prettify", "格式化").on_click(cx.listener(
+                                        |this, _, window, cx| {
+                                            this.execute(JsonAction::Prettify, window, cx)
+                                        },
+                                    )))
+                                    .child(button(theme, "clear", "清空").on_click(
                                         cx.listener(|this, _, window, cx| this.clear(window, cx)),
                                     )),
                             )
@@ -600,13 +615,13 @@ impl Render for JsonWorkbench {
                             .child(div().w(px(2.)).h(px(36.)).rounded_sm().bg(theme.border)),
                     )
                     .child(
-                        pane()
+                        pane(theme)
                             .flex_1()
                             .child(
-                                pane_header()
-                                    .child(div().text_sm().flex_1().child("结果"))
+                                pane_header(theme)
+                                    .child(pane_title(theme, "结果"))
                                     .child(
-                                        button("tree-tab", "JSON 树")
+                                        button(theme, "tree-tab", "JSON 树")
                                             .bg(if !self.text_view {
                                                 theme.selected
                                             } else {
@@ -623,7 +638,7 @@ impl Render for JsonWorkbench {
                                             })),
                                     )
                                     .child(
-                                        button("text-tab", "文本")
+                                        button(theme, "text-tab", "文本")
                                             .bg(if self.text_view {
                                                 theme.selected
                                             } else {
@@ -640,7 +655,7 @@ impl Render for JsonWorkbench {
                                             })),
                                     )
                                     .child(
-                                        button("copy-result", "复制结果")
+                                        button(theme, "copy-result", "复制结果")
                                             .opacity(if self.run.output.is_some() {
                                                 1.
                                             } else {

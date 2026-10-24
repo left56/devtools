@@ -1,6 +1,6 @@
 # Devtools
 
-原生、离线优先的开发者工具箱。用 [GPUI](https://gpui.rs/) 做界面，把 JSON、编码、时间戳、JWT 这类日常操作留在本机，而不是贴进随机网页。
+原生、离线优先的开发者工具箱。用 [GPUI](https://gpui.rs/) 做界面，把 JSON、编码、时间戳、哈希这类日常操作留在本机，而不是贴进随机网页。
 
 它不是 it-tools、DevUtils 或 DevKnife 的移植。工具广度参考 it-tools，唤起方式参考 DevUtils，检查器的完成度参考 DevKnife。第一版只做高频、可离线完成的工具。
 
@@ -8,32 +8,65 @@
 
 ## 当前能做什么
 
-M1 工作台已落盘，目前只注册 JSON：
+M2 变换、M3 检查器、M4 效率、M5 第一批联网工具已接上。侧边栏目前注册：
 
-- 自研多行输入：选择、复制/剪切/粘贴、水平/垂直滚动、等宽字体、最多 128 步线性撤销（无 redo）。
-- macOS 原生三色按钮与暗色内容区融合；紧凑侧边栏按「分类 → 工具」显示可折叠文件夹，原文与结果左右分栏，中间可拖动。
-- 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；收起后保留工具和搜索入口，输入、结果、查询和文件夹状态保留。
-- JSON 树支持展开/收起、节点选择、聚焦子树和返回根；显示并复制选中节点的 JSONPath、jq 表达式和节点值。结果可切换为只读文本。
-- 格式化、压缩、清空和复制结果。严格解析并保留键顺序；运行不改输入原文，错误显示行列并定位到输入中的对应行。
-- 侧边栏搜索和 `cmd-k` 命令面板都使用注册表搜索。支持中文「格式化」和英文 `json`。
-- 系统剪贴板仅在用户粘贴、剪切或复制时读写，没有后台监听。
+| 工具 | 作用 |
+| --- | --- |
+| JSON | 严格格式化 / 压缩 / 树形检查与路径 |
+| Base64 | 标准编解码；可切换 URL-safe |
+| URL Encode | 组件编解码（不是整段 URL 解析） |
+| HTML Escape | 实体转义与反转义 |
+| Hash | MD5 / SHA-1 / SHA-256 / SHA-512（弱算法标明不用于密码或完整性安全） |
+| UUID | 生成 v4 / v7 |
+| Timestamp | 秒或毫秒 ↔ 日期时间；默认本机时区，可改 UTC |
+| Number Base | 2 / 8 / 10 / 16，非法数字指出位置 |
+| Case | snake / camel / Pascal / kebab / CONSTANT |
+| JWT | 只解码：header / payload / 签名分栏；`alg:none` 标不受信任；`exp` 显示时间与是否过期；从不暗示已验签 |
+| Regex | Rust `regex`（不是 PCRE）：匹配、捕获组、可选替换 |
+| Cron | 5 段表达式 → 之后 5 次运行；本机时区或 UTC |
+| URL Parse | 拆分各段与 query；不发请求 |
+| Diff | 行级插入/删除；无外部 diff 进程 |
+| HTTP Request | 显式发送 HTTP；打开不发请求；响应不进 prefs |
+| DNS Lookup | 显式 A/AAAA；打开不查询 |
 
-`cargo test --workspace`（26 个单测）和全工作区 clippy `-D warnings` 已通过。已启动窗口并检查 JSON、剪贴板、撤销、搜索和错误滚动；真实系统 IME 的候选、取消和提交仍需人工验收。详见 [M1 验证记录](docs/m1-validation.md) 和 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
+共用能力：
+
+- 自研多行输入：选择、复制/剪切/粘贴、滚动、等宽字体、最多 128 步线性撤销（无 redo）。
+- **UI 按 [Refactoring UI](https://github.com/jaywilburn/refactoring-ui-skill) 原则设计**：人格定为 developer tools = casual + reserved（克制蓝强调色、冷灰中性色、中等圆角、密集但有序的间距刻度 4/8/12/16/24…）。明/暗两套独立色板（非互相反相），跟随系统外观（`WindowAppearance`；验收可用 `DEVTOOLS_FORCE_THEME=light|dark`）。
+- macOS 原生三色按钮与内容区融合；侧边栏「分类 → 工具」常开（分类标签更淡、不可折叠）；选中行左侧强调条；每工具独立字形图标；原文与结果分栏卡片。
+- 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；`cmd-k` 命令面板。
+- 系统剪贴板：**无后台监听**。输入框标题「粘贴」或 `Ctrl+Shift+V`（macOS `Cmd+Shift+V`）读一次并写入该输入；有匹配时出现紧凑建议芯片（点击只切换工具）。
+- 轻量工具（变换 / 检查器 / JSON 格式化）**输入即更新**；UUID「生成」与 HTTP/DNS「运行」仍为显式按钮。
+- 最近使用 / 收藏：侧边栏 ★ 与 `Ctrl+Shift+F`；本地 `prefs.json`（只存工具 id 与时间戳）。Linux：`$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS：`~/Library/Application Support/Devtools`。
+- 联网工具打开默认离线；运行前横幅标明「会访问网络」。
+
+`cargo test --workspace`（tools 层 74 个单测）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2–M5 壳与 Refactoring UI 重设计已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)、`/workspace/devtools-linux-verify-rui/`）。macOS 真机点验仍待补（含系统浅色/深色切换）。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
 
 ## 环境
 
-本机初始化时使用：
+**当前验收主机是 Linux x86_64（X11）**。macOS 适配留到真机点验后再收；Windows x86 更靠后。
 
-- macOS Apple Silicon
-- rustc 1.93.0
-- `gpui` 0.2.2（crates.io，只开 `font-kit`）
-- Apple metal 32023.921
+- rustc：`rust-toolchain.toml` 跟踪 stable
+- `gpui` 0.2.2：Linux 开 `x11`；macOS 开 `font-kit`（见 `crates/devtools/Cargo.toml`）
+- 无独显时用 Mesa lavapipe：`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`
 
-GPUI 在 macOS 上用 Metal 画界面，需要本机装有 Xcode。Xcode 27 的命令行工具里没有 `metal`。没装 Metal Toolchain 时，`gpui` 0.2.2 编译会报 `cannot execute tool 'metal'`。安装：
+Linux 依赖与启动步骤见 [docs/linux-x11-verification.md](docs/linux-x11-verification.md)。
+
+macOS 仍需要 Metal Toolchain：
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
+
+### 跨平台意图
+
+| 平台 | 状态 |
+| --- | --- |
+| Linux x86_64 + X11 | **当前可 `cargo run` 验收**（本仓库已在 Xvfb + lavapipe 上跑通） |
+| macOS Apple Silicon | 下一轮真机点验（透明标题栏 / traffic lights / 系统外观已 `cfg` 与 `WindowAppearance` 接线） |
+| Windows x86 | 更后；`windows-manifest` feature 占位，未验证 |
+
+已知剩余差异：macOS 融合标题栏与签名分发（Metal 本轮未复验）；Linux Wayland 未验；证书/CSV/SQL 仍为后续。`xattr` 0.2 与新 `libc` 的冲突见 `patches/`。
 
 ## 命令
 
@@ -43,24 +76,29 @@ cargo clippy -p devtools-core -p devtools-tools -p devtools --all-targets -- -D 
 cargo run -p devtools
 ```
 
+只验证可移植工具层（适合 Linux CI / 无 GPU 环境）：
+
+```bash
+cargo test -p devtools-core -p devtools-tools --all-targets
+cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
+```
+
 本机已有依赖缓存时，可以这样临时启动；配置只对这条命令生效：
 
 ```bash
 cargo run -p devtools --offline --config 'source.crates-io.registry="sparse+https://rsproxy.cn/index/"'
 ```
 
-关闭窗口后进程退出。`cmd-w` 关闭窗口，`cmd-m` 最小化，`ctrl-cmd-f` 进入/退出全屏，`cmd-b` 收起或展开侧边栏，`cmd-k` 打开或关闭命令面板。面板用上下键选择、回车打开、Esc 返回原焦点；回车只在多行编辑器中插入换行。`cmd-z` 撤销编辑，`cmd-a/c/x/v` 全选、复制、剪切、粘贴，`cmd-left/right` 到行首/行尾，配合 Shift 扩展选区。结果区只读，可选择复制。
+关闭窗口后进程退出。`cmd-w` 关闭窗口，`cmd-m` 最小化，`ctrl-cmd-f` 进入/退出全屏，`cmd-b` 收起或展开侧边栏，`cmd-k` 打开或关闭命令面板。面板用上下键选择、回车打开、Esc 返回原焦点；回车只在多行编辑器中插入换行。`cmd-z` 撤销编辑，`cmd-a/c/x/v` 全选、复制、剪切、粘贴。结果区只读，可选择复制。轻量工具输入即更新；联网工具与 UUID 生成可用 **Ctrl+Enter**（macOS 上 Cmd+Enter）执行。
 
-格式化后默认展示树，压缩后展示文本；「复制结果」始终复制最近一次运行生成的完整字符串。在树中用上下键选择、左右键折叠/展开，回车聚焦选中容器，Esc 返回根，`cmd-c` 复制选中节点的 JSON 值。路径栏可选取和复制，聚焦子树后仍显示从根开始的绝对路径；jq 栏生成过滤表达式，不执行 jq，也不包含 shell 引号。
-
-格式化或压缩之后继续编辑输入，会保留上次运行的结果或错误，并提示输入已更改，直到再次运行或清空。清空同时移除输入、结果和错误；撤销只恢复输入。
+JSON：输入时自动格式化并展示树；「压缩」「格式化」仍可手动点。变换类工具左右分栏，方向/选项在标题下芯片切换。
 
 ## 布局
 
 ```text
-crates/devtools/        GPUI 壳：窗口、文本缓冲、输入组件、JSON 工作台、搜索面板
+crates/devtools/        GPUI 壳：窗口、文本缓冲、输入组件、JSON / 变换工作台、搜索面板
 crates/devtools-core/   分类、工具元数据、注册表、搜索。不依赖 GPUI
-crates/devtools-tools/  纯函数实现和剪贴板猜测
+crates/devtools-tools/  纯函数实现和剪贴板猜测（可移植）
 docs/plan.md            研发计划
 ```
 
