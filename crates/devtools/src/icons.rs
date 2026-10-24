@@ -35,23 +35,23 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
 pub fn category_tint(category: Category, theme: &Theme) -> Rgba {
     if theme.is_dark {
         match category {
-            Category::Data => rgb(0x7aa2d4),
-            Category::Encoding => rgb(0x6bb3a0),
-            Category::Text => rgb(0xc4a574),
-            Category::Time => rgb(0x8a9bb5),
-            Category::Generators => rgb(0x7dcea0),
-            Category::Web => rgb(0x6b9eff),
-            Category::Security => rgb(0xd4a0a0),
+            Category::Data => rgb(0x7a9cc8),
+            Category::Encoding => rgb(0x6aa896),
+            Category::Text => rgb(0xb89a6e),
+            Category::Time => rgb(0x8490a8),
+            Category::Generators => rgb(0x6fbf8f),
+            Category::Web => rgb(0x6b93e8),
+            Category::Security => rgb(0xc49090),
         }
     } else {
         match category {
-            Category::Data => rgb(0x3b6fd9),
+            Category::Data => rgb(0x3568d4),
             Category::Encoding => rgb(0x0f766e),
-            Category::Text => rgb(0xa16207),
+            Category::Text => rgb(0x9a6b10),
             Category::Time => rgb(0x475569),
-            Category::Generators => rgb(0x15803d),
+            Category::Generators => rgb(0x157a3c),
             Category::Web => rgb(0x2563eb),
-            Category::Security => rgb(0xb91c1c),
+            Category::Security => rgb(0xb42318),
         }
     }
 }

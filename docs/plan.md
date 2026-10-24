@@ -6,6 +6,18 @@
 
 产品名 Devtools 是暂名，跟仓库目录一致。最终名字、bundle id 和许可证还没定。
 
+## UI 设计（Refactoring UI）
+
+人格：**developer tools = casual + reserved**。实现要点：
+
+- 独立明/暗色板（冷灰中性 + 克制蓝 accent），跟随系统外观；不用纯黑/纯白，不用紫色默认。
+- 间距刻度 `theme::space`（4/8/12/16/24/32）、圆角 `theme::radius`（4/6/8）。
+- 共享组件在 `ui.rs`：主按钮 / 次按钮对比、安静 chip、pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
+- 侧栏分类常开、标签淡化；选中态用左侧强调条而非重边框。
+- 行为不变：轻量工具实时跑；HTTP/DNS/UUID 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
+
+参考技能：https://github.com/jaywilburn/refactoring-ui-skill
+
 ## 目的
 
 开发者经常把 JSON、Base64、时间戳、JWT 贴到网页工具里。那些页面能用，但不该成为处理 token、cookie 和请求体的默认路径。

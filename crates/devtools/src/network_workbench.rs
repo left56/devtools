@@ -6,8 +6,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, chip, kv_row, pane, pane_header, paste_button, primary_button, status_chip,
-        StatusKind,
+        banner, button, chip, empty_hint, kv_row, pane, pane_header, pane_title, paste_button,
+        primary_button, status_chip, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -209,9 +209,10 @@ impl NetworkWorkbench {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_sm()
-                .text_color(theme.muted)
-                .child("尚未运行 · 确认横幅后点击「运行」才会访问网络")
+                .child(empty_hint(
+                    theme,
+                    "尚未运行 · 确认横幅后点击「运行」才会访问网络",
+                ))
                 .into_any_element(),
             NetworkState::Http(response) => {
                 let header_rows: Vec<_> = response
@@ -352,14 +353,10 @@ impl Render for NetworkWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_2()
-            .p_3()
+            .gap(px(crate::theme::space::MD))
+            .p(px(crate::theme::space::XL))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
+                workbench_title(theme, title, "")
                     .child(status_chip(theme, subtitle, StatusKind::Warning))
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
@@ -402,13 +399,10 @@ impl Render for NetworkWorkbench {
                             .flex_shrink_0()
                             .child(
                                 pane_header(theme)
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.muted)
-                                            .child(if is_http { "URL" } else { "主机名" }),
-                                    )
-                                    .child(div().flex_1())
+                                    .child(pane_title(
+                                        theme,
+                                        if is_http { "URL" } else { "主机名" },
+                                    ))
                                     .child(
                                         paste_button(theme, "network-paste").on_mouse_down(
                                             MouseButton::Left,
@@ -438,12 +432,10 @@ impl Render for NetworkWorkbench {
                                     pane(theme)
                                         .flex_1()
                                         .child(
-                                            pane_header(theme).child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(theme.muted)
-                                                    .child("请求头（Key: Value）"),
-                                            ),
+                                            pane_header(theme).child(pane_title(
+                                                theme,
+                                                "请求头（Key: Value）",
+                                            )),
                                         )
                                         .child(
                                             div()
@@ -457,12 +449,7 @@ impl Render for NetworkWorkbench {
                                     pane(theme)
                                         .flex_1()
                                         .child(
-                                            pane_header(theme).child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(theme.muted)
-                                                    .child("请求体"),
-                                            ),
+                                            pane_header(theme).child(pane_title(theme, "请求体")),
                                         )
                                         .child(
                                             div().flex_1().min_h_0().p_2().child(self.body.clone()),
@@ -475,13 +462,7 @@ impl Render for NetworkWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.muted)
-                                            .child("结果"),
-                                    )
-                                    .child(div().flex_1())
+                                    .child(pane_title(theme, "结果"))
                                     .child(status_chip(theme, "显式联网", StatusKind::Warning)),
                             )
                             .child(self.result_view(cx)),

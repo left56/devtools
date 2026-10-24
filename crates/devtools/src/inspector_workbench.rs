@@ -6,8 +6,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, card, chip, kv_row, pane, pane_header, paste_button,
-        status_chip, StatusKind,
+        banner, button, card, chip, kv_row, pane, pane_header, pane_title, paste_button,
+        status_chip, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -351,7 +351,7 @@ impl InspectorWorkbench {
             .flex_shrink_0()
             .child(
                 pane_header(theme)
-                    .child(div().text_sm().flex_1().child(primary_label(self.tool_id)))
+                    .child(pane_title(theme, primary_label(self.tool_id)))
                     .child(
                         paste_button(theme, "inspect-paste").on_mouse_down(
                             MouseButton::Left,
@@ -396,7 +396,7 @@ impl InspectorWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("模式（Rust regex）"))
+                                    .child(pane_title(theme, "模式（Rust regex）"))
                                     .child(
                                         paste_button(theme, "regex-paste-pat").on_mouse_down(
                                             MouseButton::Left,
@@ -414,7 +414,7 @@ impl InspectorWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("替换（可选）"))
+                                    .child(pane_title(theme, "替换（可选）"))
                                     .child(
                                         paste_button(theme, "regex-paste-repl").on_mouse_down(
                                             MouseButton::Left,
@@ -441,7 +441,7 @@ impl InspectorWorkbench {
                             .flex_shrink_0()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("被测文本"))
+                                    .child(pane_title(theme, "被测文本"))
                                     .child(
                                         paste_button(theme, "regex-paste-hay").on_mouse_down(
                                             MouseButton::Left,
@@ -487,7 +487,7 @@ impl InspectorWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("原文（旧）"))
+                                    .child(pane_title(theme, "原文（旧）"))
                                     .child(
                                         paste_button(theme, "diff-paste-old").on_mouse_down(
                                             MouseButton::Left,
@@ -505,7 +505,7 @@ impl InspectorWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("新文本"))
+                                    .child(pane_title(theme, "新文本"))
                                     .child(
                                         paste_button(theme, "diff-paste-new").on_mouse_down(
                                             MouseButton::Left,
@@ -676,7 +676,7 @@ impl InspectorWorkbench {
             .flex_shrink_0()
             .child(
                 pane_header(theme)
-                    .child(div().text_sm().flex_1().child(title))
+                    .child(pane_title(theme, title))
                     .child(button(theme, id, "复制").on_click(cx.listener(move |this, _, _, cx| {
                         this.copy_blob(copy.clone(), cx);
                     }))),
@@ -879,7 +879,7 @@ impl InspectorWorkbench {
         pane(theme)
             .flex_1()
             .child(
-                pane_header(theme).child(div().text_sm().flex_1().child("URL 各段（未发请求）")),
+                pane_header(theme).child(pane_title(theme, "URL 各段（未发请求）")),
             )
             .child(
                 div()
@@ -940,7 +940,7 @@ impl InspectorWorkbench {
             .flex_1()
             .child(
                 pane_header(theme)
-                    .child(div().text_sm().flex_1().child("对比结果"))
+                    .child(pane_title(theme, "对比结果"))
                     .child(status_chip(theme, format!("+{inserts}"), StatusKind::Success))
                     .child(status_chip(theme, format!("-{deletes}"), StatusKind::Error)),
             )
@@ -1054,10 +1054,14 @@ impl Render for InspectorWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_2()
-            .p_3()
+            .gap(px(crate::theme::space::MD))
+            .p(px(crate::theme::space::XL))
             .child(
-                div()
+                workbench_title(
+                    theme,
+                    title,
+                    subtitle.trim_start_matches("离线 · ").to_owned(),
+                )
                     .id("inspector-titlebar")
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
@@ -1065,19 +1069,7 @@ impl Render for InspectorWorkbench {
                             window.titlebar_double_click();
                         }
                     })
-                    .h(px(28.))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_lg().child(title))
                     .child(status_chip(theme, "离线", StatusKind::Neutral))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child(subtitle.trim_start_matches("离线 · ").to_owned()),
-                    )
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
                         view.child(status_chip(theme, self.notice, StatusKind::Accent))

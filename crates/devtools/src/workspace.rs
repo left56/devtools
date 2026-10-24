@@ -8,7 +8,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     transform_workbench::TransformWorkbench,
-    ui::{chip, status_chip, StatusKind},
+    ui::{chip, empty_hint, section_label, status_chip, StatusKind},
 };
 use devtools_core::{Detection, Registry, ToolMeta};
 use gpui::{prelude::FluentBuilder, *};
@@ -293,30 +293,39 @@ impl Workspace {
         let theme = Theme::get(cx);
         let id = tool.id;
         let favored = self.prefs.is_favorite(id);
+        let selected = id == self.selected;
         div()
             .id(SharedString::from(format!("tool-{id}")))
             .cursor_pointer()
-            .when(indent, |s| s.ml_3())
-            .px_2()
-            .py_1p5()
-            .rounded_md()
-            .bg(if id == self.selected {
+            .when(indent, |s| s.ml_1())
+            .h(px(30.))
+            .px(px(crate::theme::space::SM))
+            .rounded(px(crate::theme::radius::MD))
+            .bg(if selected {
                 theme.selected
-            } else {
-                theme.sidebar
-            })
-            .border_1()
-            .border_color(if id == self.selected {
-                theme.accent_muted
             } else {
                 theme.sidebar
             })
             .hover(move |s| s.bg(theme.selected))
             .child(
                 div()
+                    .h_full()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(px(crate::theme::space::SM))
+                    .child(
+                        // Selected accent rail — hierarchy without a heavy border box.
+                        div()
+                            .w(px(2.))
+                            .h(px(16.))
+                            .rounded(px(1.))
+                            .flex_shrink_0()
+                            .bg(if selected {
+                                theme.accent
+                            } else {
+                                theme.sidebar
+                            }),
+                    )
                     .child(
                         div()
                             .w(px(22.))
@@ -326,7 +335,18 @@ impl Workspace {
                             .text_color(icons::category_tint(tool.category, &theme))
                             .child(icons::tool_glyph(id)),
                     )
-                    .child(div().text_sm().flex_1().text_color(theme.text).child(tool.name))
+                    .child(
+                        div()
+                            .text_sm()
+                            .flex_1()
+                            .font_weight(if selected {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .text_color(theme.text)
+                            .child(tool.name),
+                    )
                     .child(
                         div()
                             .id(SharedString::from(format!("fav-{id}")))
@@ -336,7 +356,7 @@ impl Workspace {
                             .text_color(if favored {
                                 theme.warning
                             } else {
-                                theme.muted
+                                theme.faint
                             })
                             .child(if favored { "★" } else { "☆" })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -471,15 +491,8 @@ impl Workspace {
                 div()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .text_xs()
-                            .text_color(theme.faint)
-                            .child("收藏"),
-                    )
+                    .gap(px(2.))
+                    .child(section_label(theme, "收藏"))
                     .children(rows),
             );
         }
@@ -500,16 +513,8 @@ impl Workspace {
                 div()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .px_2()
-                            .pt_2()
-                            .pb_1()
-                            .text_xs()
-                            .text_color(theme.faint)
-                            .child(category.label()),
-                    )
+                    .gap(px(2.))
+                    .child(section_label(theme, category.label()))
                     .children(rows),
             );
         }
@@ -532,7 +537,9 @@ impl Workspace {
                     .gap_1()
                     .flex()
                     .items_center()
-                    .text_base()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.text)
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
                         if event.click_count == 2 {
@@ -544,15 +551,15 @@ impl Workspace {
             )
             .child(
                 div()
-                    .mx_3()
-                    .mb_2()
-                    .h(px(32.))
-                    .px_2()
-                    .py_1()
-                    .bg(theme.elevated)
+                    .mx(px(crate::theme::space::MD))
+                    .mb(px(crate::theme::space::SM))
+                    .h(px(30.))
+                    .px(px(crate::theme::space::SM))
+                    .py(px(crate::theme::space::XS))
+                    .bg(theme.panel)
                     .border_1()
                     .border_color(theme.border)
-                    .rounded_md()
+                    .rounded(px(crate::theme::radius::MD))
                     .child(self.search.clone()),
             )
             .child(
@@ -561,26 +568,24 @@ impl Workspace {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .p_2()
+                    .px(px(crate::theme::space::SM))
+                    .pb(px(crate::theme::space::SM))
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .gap(px(2.))
                     .when(folders.is_empty(), |view| {
-                        view.child(
-                            div()
-                                .p_2()
-                                .text_sm()
-                                .text_color(theme.muted)
-                                .child("没有匹配的工具"),
-                        )
+                        view.child(empty_hint(theme, "没有匹配的工具"))
                     })
                     .children(folders),
             )
             .child(
                 div()
-                    .p_3()
+                    .px(px(crate::theme::space::MD))
+                    .py(px(crate::theme::space::MD))
+                    .border_t_1()
+                    .border_color(theme.border_subtle)
                     .text_xs()
-                    .text_color(theme.muted)
+                    .text_color(theme.faint)
                     .child(palette_hint()),
             )
             .into_any_element()
@@ -618,15 +623,15 @@ impl Workspace {
         let mut row = div()
             .id("suggestion-strip")
             .flex_shrink_0()
-            .px_3()
-            .py_1p5()
+            .px(px(crate::theme::space::LG))
+            .py(px(crate::theme::space::SM))
             .border_b_1()
-            .border_color(theme.border)
+            .border_color(theme.border_subtle)
             .bg(theme.bg)
             .flex()
             .flex_wrap()
             .items_center()
-            .gap_2();
+            .gap(px(crate::theme::space::SM));
         if !self.suggestions.is_empty() {
             row = row
                 .child(
@@ -768,13 +773,7 @@ impl Workspace {
                             .children(rows),
                     )
                     .when(tools.is_empty(), |view| {
-                        view.child(
-                            div()
-                                .p_3()
-                                .text_sm()
-                                .text_color(theme.muted)
-                                .child("没有匹配的工具"),
-                        )
+                        view.child(empty_hint(theme, "没有匹配的工具"))
                     }),
             )
     }

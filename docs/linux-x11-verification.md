@@ -123,3 +123,18 @@ cargo run -p devtools
 - Linux X11：GPUI 初始常为 Light；有 xdg-desktop-portal 时随 `color-scheme` 更新。裸 Xvfb 无 portal → 默认 Light。验收可用 `DEVTOOLS_FORCE_THEME=dark|light` 强制色板（不进 prefs）。
 - 侧栏：分类不可折叠，标签用 `theme.faint`；每工具独立字形（`{}` / `64` / `%` / `<>` / `#` / `◈` / `◷` / `0x` / `Aa` / `◉` / `.*` / `⟳` / `◎` / `±` / `↗` / `⌖`），分类淡色 tint。
 - 截图：`/workspace/devtools-linux-verify-theme/final-light-sidebar.png`、`final-dark-sidebar.png`、`final-*-sidebar-crop.png`。
+
+
+## Refactoring UI 重设计（2026-10-24）
+
+按 Refactoring UI（casual + reserved）重做主题 token 与 chrome。截图：`/workspace/devtools-linux-verify-rui/`。
+
+| 场景 | 文件 |
+| --- | --- |
+| 浅色侧栏 + JSON | `final-light-sidebar.png` / `final-light-sidebar-crop.png` |
+| 深色侧栏 + JSON | `final-dark-sidebar.png` / `final-dark-sidebar-crop.png` |
+| 浅色 Base64 实时 | `final-light-base64.png` |
+| 深色 Regex | `final-dark-regex.png` |
+| HTTP 联网横幅 | `final-http-banner.png` |
+
+强制色板：`DEVTOOLS_FORCE_THEME=light|dark`（裸 Xvfb 无 portal 时默认 Light）。

@@ -8,7 +8,7 @@ use crate::{
     actions::PrimaryRun,
     text_field::{Edited, TextField},
     theme::Theme,
-    ui::{button, chip, pane, pane_header, paste_button, primary_button, status_chip, StatusKind},
+    ui::{button, chip, pane, pane_header, pane_title, paste_button, primary_button, status_chip, workbench_title, StatusKind},
 };
 use devtools_core::ids;
 use devtools_tools::{
@@ -472,7 +472,7 @@ impl TransformWorkbench {
     fn input_header(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let mut header = pane_header(theme)
-            .child(div().text_sm().flex_1().child("原文"))
+            .child(pane_title(theme, "原文"))
             .child(
                 paste_button(theme, "transform-paste").on_mouse_down(
                     MouseButton::Left,
@@ -600,8 +600,8 @@ impl Render for TransformWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_2()
-            .p_3()
+            .gap(px(crate::theme::space::MD))
+            .p(px(crate::theme::space::XL))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if let Some((start, split)) = this.resizing {
                     if event.pressed_button == Some(MouseButton::Left) {
@@ -624,7 +624,11 @@ impl Render for TransformWorkbench {
                 cx.listener(|this, _, _, _| this.resizing = None),
             )
             .child(
-                div()
+                workbench_title(
+                    theme,
+                    title,
+                    subtitle.trim_start_matches("离线 · ").to_owned(),
+                )
                     .id("transform-titlebar")
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
@@ -632,19 +636,7 @@ impl Render for TransformWorkbench {
                             window.titlebar_double_click();
                         }
                     })
-                    .h(px(28.))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().text_lg().child(title))
                     .child(status_chip(theme, "离线", StatusKind::Neutral))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child(subtitle.trim_start_matches("离线 · ").to_owned()),
-                    )
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
                         view.child(status_chip(theme, self.notice, StatusKind::Accent))
@@ -652,7 +644,7 @@ impl Render for TransformWorkbench {
             )
             .child(self.options_bar(cx))
             .when_some(self.error.as_ref(), |view, error| {
-                view.child(div().text_sm().text_color(theme.error).child(error.clone()))
+                view.child(crate::ui::banner(theme, StatusKind::Error, error.clone()))
             })
             .child(
                 div()
@@ -715,7 +707,7 @@ impl Render for TransformWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("结果"))
+                                    .child(pane_title(theme, "结果"))
                                     .child(
                                         button(theme, "copy-result", "复制结果")
                                             .opacity(if self.output_text.is_some() {

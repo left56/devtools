@@ -32,14 +32,15 @@ M2 变换、M3 检查器、M4 效率、M5 第一批联网工具已接上。侧�
 共用能力：
 
 - 自研多行输入：选择、复制/剪切/粘贴、滚动、等宽字体、最多 128 步线性撤销（无 redo）。
-- macOS 原生三色按钮与内容区融合；侧边栏「分类 → 工具」常开（分类标签更淡、不可折叠）；每工具独立字形图标；明/暗主题跟随系统外观；原文与结果左右分栏。
+- **UI 按 [Refactoring UI](https://github.com/jaywilburn/refactoring-ui-skill) 原则设计**：人格定为 developer tools = casual + reserved（克制蓝强调色、冷灰中性色、中等圆角、密集但有序的间距刻度 4/8/12/16/24…）。明/暗两套独立色板（非互相反相），跟随系统外观（`WindowAppearance`；验收可用 `DEVTOOLS_FORCE_THEME=light|dark`）。
+- macOS 原生三色按钮与内容区融合；侧边栏「分类 → 工具」常开（分类标签更淡、不可折叠）；选中行左侧强调条；每工具独立字形图标；原文与结果分栏卡片。
 - 侧边栏可用顶部箭头或 `cmd-b` 收起/展开；`cmd-k` 命令面板。
 - 系统剪贴板：**无后台监听**。输入框标题「粘贴」或 `Ctrl+Shift+V`（macOS `Cmd+Shift+V`）读一次并写入该输入；有匹配时出现紧凑建议芯片（点击只切换工具）。
 - 轻量工具（变换 / 检查器 / JSON 格式化）**输入即更新**；UUID「生成」与 HTTP/DNS「运行」仍为显式按钮。
 - 最近使用 / 收藏：侧边栏 ★ 与 `Ctrl+Shift+F`；本地 `prefs.json`（只存工具 id 与时间戳）。Linux：`$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS：`~/Library/Application Support/Devtools`。
 - 联网工具打开默认离线；运行前横幅标明「会访问网络」。
 
-`cargo test --workspace`（tools 层 74 个单测）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2–M5 壳已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)、`/workspace/devtools-linux-verify-m4/`、`/workspace/devtools-linux-verify-m5/`、`/workspace/devtools-linux-verify-theme/`）。macOS 真机点验仍待补（含系统浅色/深色切换）。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
+`cargo test --workspace`（tools 层 74 个单测）与全工作区 clippy `-D warnings` 已在 Linux x86_64 上通过；M2–M5 壳与 Refactoring UI 重设计已在同机 X11 窗口点验（见 [Linux 验证记录](docs/linux-x11-verification.md)、`/workspace/devtools-linux-verify-rui/`）。macOS 真机点验仍待补（含系统浅色/深色切换）。另见 [M1 验证记录](docs/m1-validation.md) 与 [JSON 检查器验证记录](docs/json-inspector-validation.md)。
 
 ## 环境
 

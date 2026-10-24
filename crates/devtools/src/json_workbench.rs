@@ -4,7 +4,7 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
-    ui::{button, pane, pane_header, paste_button, status_chip, StatusKind},
+    ui::{button, pane, pane_header, pane_title, paste_button, status_chip, workbench_title, StatusKind},
 };
 use devtools_tools::json::{JsonDocument, JsonKind};
 use gpui::{prelude::FluentBuilder, Timer, *};
@@ -493,8 +493,8 @@ impl Render for JsonWorkbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .gap_2()
-            .p_3()
+            .gap(px(crate::theme::space::MD))
+            .p(px(crate::theme::space::XL))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 if let Some((start, split)) = this.resizing {
                     if event.pressed_button == Some(MouseButton::Left) {
@@ -517,7 +517,7 @@ impl Render for JsonWorkbench {
                 cx.listener(|this, _, _, _| this.resizing = None),
             )
             .child(
-                div()
+                workbench_title(theme, "JSON", "离线 · 严格解析 · 保留键顺序")
                     .id("workbench-titlebar")
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
@@ -525,30 +525,13 @@ impl Render for JsonWorkbench {
                             window.titlebar_double_click();
                         }
                     })
-                    .h(px(28.))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(div().text_lg().child("JSON"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child("离线 · 严格解析 · 保留键顺序"),
-                    )
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
                         view.child(status_chip(theme, self.notice, StatusKind::Accent))
                     }),
             )
             .when_some(self.run.error.as_ref(), |view, error| {
-                view.child(
-                    div()
-                        .text_sm()
-                        .text_color(theme.error)
-                        .child(error.to_string()),
-                )
+                view.child(crate::ui::banner(theme, StatusKind::Error, error.to_string()))
             })
             .child(
                 div()
@@ -579,7 +562,7 @@ impl Render for JsonWorkbench {
                             .flex_shrink_0()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("原文"))
+                                    .child(pane_title(theme, "原文"))
                                     .child(
                                         paste_button(theme, "json-paste").on_mouse_down(
                                             MouseButton::Left,
@@ -636,7 +619,7 @@ impl Render for JsonWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(div().text_sm().flex_1().child("结果"))
+                                    .child(pane_title(theme, "结果"))
                                     .child(
                                         button(theme, "tree-tab", "JSON 树")
                                             .bg(if !self.text_view {
