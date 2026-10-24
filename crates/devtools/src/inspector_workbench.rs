@@ -6,8 +6,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::Theme,
     ui::{
-        banner, button, card, chip, kv_row, pane, pane_header, pane_title, paste_button,
-        status_chip, workbench_title, StatusKind,
+        banner, button, card, chip, kv_row, multiline_mono, pane, pane_header, pane_title,
+        paste_button, single_line, status_chip, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -553,7 +553,7 @@ impl InspectorWorkbench {
                             .bg(theme.elevated)
                             .font(crate::theme::monospace())
                             .text_sm()
-                            .child(format!("{}. {line}", i + 1))
+                            .child(single_line(format!("{}. {line}", i + 1)))
                     })
                     .collect();
                 pane(theme)
@@ -666,12 +666,7 @@ impl InspectorWorkbench {
     ) -> Div {
         let theme = Theme::get(cx);
         let copy = body.clone();
-        let display = if body.is_empty() {
-            SharedString::from("（空）")
-        } else {
-            SharedString::from(body)
-        };
-        let empty = display.as_ref() == "（空）";
+        let empty = body.is_empty();
         card(theme)
             .flex_shrink_0()
             .child(
@@ -685,10 +680,14 @@ impl InspectorWorkbench {
                 div()
                     .id(SharedString::from(format!("{id}-body")))
                     .p_3()
-                    .font(crate::theme::monospace())
-                    .text_sm()
-                    .text_color(if empty { theme.muted } else { theme.text })
-                    .child(display),
+                    .child(if empty {
+                        div()
+                            .text_sm()
+                            .text_color(theme.muted)
+                            .child(SharedString::from("（空）"))
+                    } else {
+                        multiline_mono(theme, body)
+                    }),
             )
     }
 
@@ -719,7 +718,7 @@ impl InspectorWorkbench {
                     .border_color(theme.border_subtle)
                     .font(crate::theme::monospace())
                     .text_xs()
-                    .child(format!("#{i} {}..{} {:?}", m.start, m.end, m.full))
+                    .child(single_line(format!("#{i} {}..{} {:?}", m.start, m.end, m.full)))
                     .child(div().text_color(theme.muted).child(caps))
             })
             .collect();
@@ -932,7 +931,7 @@ impl InspectorWorkbench {
                     .child(div().w(px(28.)).text_color(theme.muted).child(old))
                     .child(div().w(px(28.)).text_color(theme.muted).child(new))
                     .child(div().w(px(14.)).font_weight(FontWeight::BOLD).child(prefix))
-                    .child(div().flex_1().child(line.text.clone()))
+                    .child(div().flex_1().min_w_0().child(single_line(line.text.as_str())))
             })
             .collect();
 

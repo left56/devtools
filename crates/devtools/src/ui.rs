@@ -89,7 +89,7 @@ pub fn status_chip(theme: Theme, label: impl Into<SharedString>, kind: StatusKin
         .text_color(fg)
         .border_1()
         .border_color(border)
-        .child(label.into())
+        .child(single_line(label.into().as_ref()))
 }
 
 #[derive(Clone, Copy)]
@@ -111,6 +111,59 @@ fn status_colors(theme: Theme, kind: StatusKind) -> (Rgba, Rgba, Rgba) {
     }
 }
 
+
+/// GPUI 0.2.2 panics when a plain text run contains `\\n` / `\\r`.
+/// Flatten for chips, banners, titles, and other single-run labels.
+pub fn single_line(text: impl AsRef<str>) -> SharedString {
+    let flat: String = text
+        .as_ref()
+        .chars()
+        .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
+        .collect();
+    SharedString::from(flat)
+}
+
+/// Multi-line monospace block: one GPUI text run per line (safe), capped for layout.
+pub fn multiline_mono(theme: Theme, text: impl AsRef<str>) -> Div {
+    let raw = text.as_ref();
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .gap(px(1.))
+        .min_w_0()
+        .font(crate::theme::monospace())
+        .text_sm()
+        .text_color(theme.text);
+    if raw.is_empty() {
+        return col.child(
+            div()
+                .text_color(theme.faint)
+                .child(SharedString::from("—")),
+        );
+    }
+    const MAX_LINES: usize = 120;
+    let total = raw.lines().count();
+    for line in raw.lines().take(MAX_LINES) {
+        let display = if line.is_empty() {
+            SharedString::from(" ")
+        } else {
+            SharedString::from(line.to_owned())
+        };
+        col = col.child(div().min_w_0().child(display));
+    }
+    if total > MAX_LINES {
+        col = col.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted)
+                .child(SharedString::from(format!(
+                    "…共 {total} 行，点复制可取全文"
+                ))),
+        );
+    }
+    col
+}
+
 /// Compact warning / error / info banner.
 pub fn banner(theme: Theme, kind: StatusKind, text: impl Into<SharedString>) -> Div {
     let (fg, bg, border) = status_colors(theme, kind);
@@ -124,7 +177,7 @@ pub fn banner(theme: Theme, kind: StatusKind, text: impl Into<SharedString>) -> 
         .border_color(border)
         .text_sm()
         .text_color(fg)
-        .child(text.into())
+        .child(single_line(text.into().as_ref()))
 }
 
 /// Full-height content pane (input / result columns).
@@ -207,7 +260,7 @@ pub fn workbench_title(
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child(subtitle),
+                    .child(single_line(subtitle.as_ref())),
             )
         })
 }
@@ -231,7 +284,7 @@ pub fn empty_hint(theme: Theme, text: impl Into<SharedString>) -> Div {
         .py(px(space::XXL))
         .text_sm()
         .text_color(theme.faint)
-        .child(text.into())
+        .child(single_line(text.into().as_ref()))
 }
 
 /// Fixed-width label + mono value box (URL Parse KV rows).
@@ -257,7 +310,7 @@ pub fn kv_row(
                 .text_xs()
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if empty { theme.faint } else { theme.muted })
-                .child(label.into()),
+                .child(single_line(label.into().as_ref())),
         )
         .child(
             div()
@@ -275,7 +328,7 @@ pub fn kv_row(
                 .child(if empty {
                     SharedString::from("—")
                 } else {
-                    value
+                    single_line(value.as_ref())
                 }),
         )
 }

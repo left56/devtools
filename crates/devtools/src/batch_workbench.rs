@@ -7,8 +7,8 @@ use crate::{
     text_field::{Edited, TextField},
     theme::{self, Theme},
     ui::{
-        button, chip, empty_hint, pane, pane_header, pane_title, paste_button, primary_button,
-        status_chip, workbench_title, StatusKind,
+        button, chip, empty_hint, multiline_mono, pane, pane_header, pane_title, paste_button,
+        primary_button, status_chip, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -346,7 +346,7 @@ impl BatchWorkbench {
                     div()
                         .id(SharedString::from(format!("batch-row-{i}")))
                         .flex()
-                        .items_center()
+                        .items_start()
                         .gap(px(theme::space::SM))
                         .px(px(theme::space::MD))
                         .py(px(theme::space::XS))
@@ -354,6 +354,7 @@ impl BatchWorkbench {
                             div()
                                 .w(px(128.))
                                 .flex_shrink_0()
+                                .pt(px(theme::space::XS))
                                 .text_xs()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme.muted)
@@ -369,12 +370,13 @@ impl BatchWorkbench {
                                 .bg(theme.elevated)
                                 .border_1()
                                 .border_color(theme.border_subtle)
-                                .font(theme::monospace())
-                                .text_sm()
-                                .text_color(theme.text)
-                                .child(value.clone()),
+                                .child(multiline_mono(theme, value.as_str())),
                         )
-                        .child(copy_chip(format!("batch-copy-{i}"), copy, cx))
+                        .child(
+                            div()
+                                .pt(px(theme::space::XS))
+                                .child(copy_chip(format!("batch-copy-{i}"), copy, cx)),
+                        )
                         .into_any_element()
                 })
                 .collect();
