@@ -167,18 +167,10 @@ pub fn catalog() -> Vec<ToolMeta> {
 
 /// Tools that use the shared transform workbench (single in / out).
 pub fn is_transform_tool(id: &str) -> bool {
+    // Generators only. Converters use BatchWorkbench (one input → all outputs).
     matches!(
         id,
-        ids_list::BASE64
-            | ids_list::URL_ENCODE
-            | ids_list::HTML_ESCAPE
-            | ids_list::HASH
-            | ids_list::UUID
-            | ids_list::ULID
-            | ids_list::TOKEN
-            | ids_list::LOREM
-            | ids_list::SLUGIFY
-            | ids_list::CASE
+        ids_list::UUID | ids_list::ULID | ids_list::TOKEN | ids_list::LOREM
     )
 }
 
@@ -199,6 +191,12 @@ pub fn is_batch_tool(id: &str) -> bool {
     matches!(
         id,
         ids_list::TIMESTAMP
+            | ids_list::BASE64
+            | ids_list::URL_ENCODE
+            | ids_list::HTML_ESCAPE
+            | ids_list::HASH
+            | ids_list::CASE
+            | ids_list::SLUGIFY
             | ids_list::NUMBER_BASE
             | ids_list::TEXT_STATS
             | ids_list::ROMAN
@@ -292,6 +290,11 @@ mod tests {
             NetworkUse::Explicit
         );
         assert!(is_batch_tool(ids::TIMESTAMP));
+        assert!(is_batch_tool(ids::BASE64));
+        assert!(is_batch_tool(ids::HASH));
+        assert!(is_batch_tool(ids::CASE));
+        assert!(!is_transform_tool(ids::BASE64));
+        assert!(!is_transform_tool(ids::HASH));
         assert!(is_batch_tool(ids::BASIC_AUTH));
         assert!(is_batch_generate_tool(ids::MAC_GEN));
         assert!(is_batch_tool(ids::QR_CODE));

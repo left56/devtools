@@ -30,7 +30,7 @@ pub fn meta() -> ToolMeta {
         id: ids::BASE64,
         name: "Base64",
         category: Category::Encoding,
-        summary: "标准 Base64 编解码。URL-safe 可作为开关，默认标准。",
+        summary: "Base64 批量：标准/URL-safe 编码，并在可解码时给出解码结果。",
         keywords: &["base64", "编码", "解码", "url-safe"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -42,6 +42,43 @@ pub fn encode(input: &str, alphabet: Alphabet) -> String {
         Alphabet::Standard => STANDARD.encode(input.as_bytes()),
         Alphabet::UrlSafe => URL_SAFE.encode(input.as_bytes()),
     }
+}
+
+/// One input → encode both alphabets; if input looks like Base64, also decode.
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    let mut rows = vec![
+        ("标准编码", encode(trimmed, Alphabet::Standard)),
+        ("URL-safe 编码", encode(trimmed, Alphabet::UrlSafe)),
+    ];
+    let std_dec = decode(trimmed, Alphabet::Standard).ok();
+    let url_dec = decode(trimmed, Alphabet::UrlSafe).ok();
+    if looks_like_base64(trimmed) || std_dec.is_some() || url_dec.is_some() {
+        if let Some(t) = std_dec {
+            rows.push(("标准解码", t.clone()));
+            if let Some(u) = url_dec
+                && u != t
+            {
+                rows.push(("URL-safe 解码", u));
+            }
+        } else if let Some(u) = url_dec {
+            rows.push(("URL-safe 解码", u));
+        }
+    }
+    Ok(rows)
+}
+
+fn looks_like_base64(s: &str) -> bool {
+    let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if cleaned.len() < 4 {
+        return false;
+    }
+    cleaned.bytes().all(|b| {
+        b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'-' | b'_' | b'=')
+    })
 }
 
 pub fn decode(input: &str, alphabet: Alphabet) -> Result<String, Base64Error> {
@@ -106,5 +143,14 @@ mod tests {
         // 0xff alone is invalid UTF-8; /w== is standard Base64 for [0xff].
         let error = decode("/w==", Alphabet::Standard).unwrap_err();
         assert!(error.message.contains("UTF-8"));
+    }
+
+    #[test]
+    fn convert_all_text_and_encoded() {
+        let rows = convert_all("hi").unwrap();
+        assert!(rows.iter().any(|r| r.0 == "标准编码" && r.1 == "aGk="));
+        let enc = encode("hi", Alphabet::Standard);
+        let rows2 = convert_all(&enc).unwrap();
+        assert!(rows2.iter().any(|r| r.0 == "标准解码" && r.1 == "hi"));
     }
 }

@@ -7,7 +7,7 @@ pub fn json_yaml_meta() -> ToolMeta {
         id: ids::JSON_YAML,
         name: "JSON ↔ YAML",
         category: Category::Data,
-        summary: "JSON 与 YAML 互转。自动识别输入格式，批量给出两种结果。",
+        summary: "自动识别 JSON/YAML/TOML，批量给出三种格式。",
         keywords: &["json", "yaml", "yml", "转换"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -19,7 +19,7 @@ pub fn json_toml_meta() -> ToolMeta {
         id: ids::JSON_TOML,
         name: "JSON ↔ TOML",
         category: Category::Data,
-        summary: "JSON 与 TOML 互转。自动识别输入格式。",
+        summary: "自动识别 JSON/YAML/TOML，批量给出三种格式。",
         keywords: &["json", "toml", "转换"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -83,19 +83,20 @@ fn toml_from_json(v: &serde_json::Value) -> Result<toml::Value, String> {
     }
 }
 
+fn all_formats(v: &serde_json::Value) -> Result<Vec<(&'static str, String)>, String> {
+    let json = serde_json::to_string_pretty(v).map_err(|e| e.to_string())?;
+    let yaml = serde_yaml::to_string(v).map_err(|e| e.to_string())?;
+    let toml_v = json_to_toml_value(v)?;
+    let toml_s = toml::to_string_pretty(&toml_v).map_err(|e| e.to_string())?;
+    Ok(vec![("JSON", json), ("YAML", yaml), ("TOML", toml_s)])
+}
+
 pub fn json_yaml_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
-    let v = parse_value(input)?;
-    let json = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
-    let yaml = serde_yaml::to_string(&v).map_err(|e| e.to_string())?;
-    Ok(vec![("JSON", json), ("YAML", yaml)])
+    all_formats(&parse_value(input)?)
 }
 
 pub fn json_toml_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
-    let v = parse_value(input)?;
-    let json = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
-    let toml_v = json_to_toml_value(&v)?;
-    let toml_s = toml::to_string_pretty(&toml_v).map_err(|e| e.to_string())?;
-    Ok(vec![("JSON", json), ("TOML", toml_s)])
+    all_formats(&parse_value(input)?)
 }
 
 #[cfg(test)]
@@ -125,7 +126,7 @@ pub fn yaml_toml_meta() -> ToolMeta {
         id: ids::YAML_TOML,
         name: "YAML ↔ TOML",
         category: Category::Data,
-        summary: "YAML 与 TOML 互转（经 JSON 中介）。自动识别。",
+        summary: "自动识别 JSON/YAML/TOML，批量给出三种格式。",
         keywords: &["yaml", "toml", "转换"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -133,11 +134,7 @@ pub fn yaml_toml_meta() -> ToolMeta {
 }
 
 pub fn yaml_toml_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
-    let v = parse_value(input)?;
-    let yaml = serde_yaml::to_string(&v).map_err(|e| e.to_string())?;
-    let toml_v = json_to_toml_value(&v)?;
-    let toml_s = toml::to_string_pretty(&toml_v).map_err(|e| e.to_string())?;
-    Ok(vec![("YAML", yaml), ("TOML", toml_s)])
+    all_formats(&parse_value(input)?)
 }
 
 #[cfg(test)]

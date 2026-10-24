@@ -9,15 +9,17 @@ pub enum CaseStyle {
     Pascal,
     Kebab,
     Constant,
+    Title,
 }
 
 impl CaseStyle {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Snake,
         Self::Camel,
         Self::Pascal,
         Self::Kebab,
         Self::Constant,
+        Self::Title,
     ];
 
     pub fn label(self) -> &'static str {
@@ -27,6 +29,7 @@ impl CaseStyle {
             Self::Pascal => "PascalCase",
             Self::Kebab => "kebab-case",
             Self::Constant => "CONSTANT_CASE",
+            Self::Title => "Title Case",
         }
     }
 }
@@ -36,7 +39,7 @@ pub fn meta() -> ToolMeta {
         id: ids::CASE,
         name: "Case",
         category: Category::Text,
-        summary: "在 snake、camel、kebab、CONSTANT 等标识符风格之间转换。",
+        summary: "一次输入给出 snake / camel / Pascal / kebab / CONSTANT / Title。",
         keywords: &[
             "case",
             "snake",
@@ -82,7 +85,23 @@ pub fn convert(input: &str, style: CaseStyle) -> String {
             first + &rest
         }
         CaseStyle::Pascal => words.into_iter().map(|w| capitalize(&w)).collect(),
+        CaseStyle::Title => words
+            .into_iter()
+            .map(|w| capitalize(&w))
+            .collect::<Vec<_>>()
+            .join(" "),
     }
+}
+
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    Ok(CaseStyle::ALL
+        .into_iter()
+        .map(|style| (style.label(), convert(trimmed, style)))
+        .collect())
 }
 
 fn capitalize(word: &str) -> String {
@@ -178,5 +197,13 @@ mod tests {
     #[test]
     fn already_kebab() {
         assert_eq!(convert("foo-bar-baz", CaseStyle::Camel), "fooBarBaz");
+    }
+
+    #[test]
+    fn convert_all_styles() {
+        let rows = convert_all("hello_world").unwrap();
+        assert_eq!(rows.len(), 6);
+        assert!(rows.iter().any(|r| r.0 == "camelCase" && r.1 == "helloWorld"));
+        assert!(rows.iter().any(|r| r.0 == "Title Case" && r.1 == "Hello World"));
     }
 }

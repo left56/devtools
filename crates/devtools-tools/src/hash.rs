@@ -41,7 +41,7 @@ pub fn meta() -> ToolMeta {
         id: ids::HASH,
         name: "Hash",
         category: Category::Security,
-        summary: "MD5、SHA-1、SHA-256、SHA-384、SHA-512。MD5/SHA-1 仅用于校验和兼容。",
+        summary: "一次输入给出 MD5/SHA-1/SHA-256/SHA-384/SHA-512。弱算法已标注。",
         keywords: &["hash", "md5", "sha1", "sha256", "sha384", "sha512", "摘要", "校验"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -49,6 +49,25 @@ pub fn meta() -> ToolMeta {
 }
 
 /// Hex digest of the UTF-8 bytes of `input`. Empty input is allowed (empty-string digest).
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    // Empty allowed — empty-string digests are well-defined.
+    let mut rows: Vec<(&'static str, String)> = Algorithm::ALL
+        .into_iter()
+        .map(|algo| {
+            let label = match algo {
+                Algorithm::Md5 => "MD5（不用于密码）",
+                Algorithm::Sha1 => "SHA-1（不用于密码）",
+                Algorithm::Sha256 => "SHA-256",
+                Algorithm::Sha384 => "SHA-384",
+                Algorithm::Sha512 => "SHA-512",
+            };
+            (label, digest(input, algo))
+        })
+        .collect();
+    rows.push(("字节数", input.len().to_string()));
+    Ok(rows)
+}
+
 pub fn digest(input: &str, algorithm: Algorithm) -> String {
     let bytes = input.as_bytes();
     match algorithm {
@@ -110,5 +129,15 @@ mod tests {
         assert!(Algorithm::Md5.safety_note().is_some());
         assert!(Algorithm::Sha1.safety_note().is_some());
         assert!(Algorithm::Sha256.safety_note().is_none());
+    }
+
+    #[test]
+    fn convert_all_lists_family() {
+        let rows = convert_all("abc").unwrap();
+        assert!(rows.len() >= 5);
+        assert_eq!(
+            rows.iter().find(|r| r.0.starts_with("MD5")).unwrap().1,
+            "900150983cd24fb0d6963f7d28e17f72"
+        );
     }
 }

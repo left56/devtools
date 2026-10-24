@@ -8,13 +8,16 @@
 
 ## UI 设计（Refactoring UI）
 
+**转换器 UX 规则**：凡「一种输入 → 多种等价/相关表示」的工具（编解码、进制、大小写、摘要、数据格式互转等）必须用 `BatchWorkbench`：单输入、能自动识别则识别、批量展示全部有用输出、每行复制。不要用 TransformWorkbench 的方向芯片墙。仅随机生成类保留 TransformWorkbench。Date-time 是标杆。
+
+
 人格：**developer tools = casual + reserved**。实现要点：
 
 - 独立明/暗色板（冷灰中性 + 克制蓝 accent），跟随系统外观；不用纯黑/纯白，不用紫色默认。
 - 间距刻度 `theme::space`（4/8/12/16/24/32）、圆角 `theme::radius`（4/6/8）。
 - 共享组件在 `ui.rs`：主按钮 / 次按钮 /「粘贴」**同一固定高度**（28px）与 `text_sm`；安静 chip 可更密；pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
 - 侧栏分类常开、标签淡化；选中态用左侧强调条而非重边框。
-- **BatchWorkbench**：一输入 → 多行标注结果（每行复制）。`timestamp` / `number-base` / 颜色 / chmod 等走此台。
+- **BatchWorkbench**：一输入 → 多行标注结果（每行复制）。**转换器统一走此台**（与 Date-time 同设计：能自动识别则识别，批量给出相关输出）。`timestamp` / `base64` / `hash` / `case` / 数据格式 / 颜色 / chmod 等。
 - 行为：轻量工具实时跑；HTTP/DNS/UUID/ULID/Lorem 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
 
 参考技能：https://github.com/jaywilburn/refactoring-ui-skill
@@ -82,10 +85,10 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
 - `ToolMeta`、固定分类、注册表、搜索。重复 id 会在构造注册表时 panic；空分类隐藏。
 - JSON `prettify` / `minify`：严格解析、保留键顺序。错误行号从 1 开始，列号为 `serde_json` 的字节列号，空输入列号为 0。
 - M2 纯函数工具（全部 `NetworkUse::Offline`，界面接好后 `Availability::Ready`）：
-  - `base64`：标准编解码；URL-safe 为开关，默认标准。
-  - `url-encode`：组件编解码（非整段 URL 解析）。
-  - `html-escape`：实体转义/反转义，含数字字符引用。
-  - `hash`：MD5 / SHA-1 / SHA-256 / SHA-512；弱算法旁标注「不用于密码或完整性安全」。
+  - `base64`：`BatchWorkbench` — 标准/URL-safe 编码，可解码时一并展示（无方向芯片）。
+  - `url-encode`：`BatchWorkbench` — 编码+解码批量；含 `%` 时优先解码。
+  - `html-escape`：`BatchWorkbench` — 转义+反转义批量。
+  - `hash`：`BatchWorkbench` — 一次给出 MD5/SHA-1/SHA-256/SHA-384/SHA-512；弱算法在行标题标注。
   - `uuid`：v4 与可选 v7（`uuid` crate，不自写 RNG）。
   - `timestamp`（显示名 Date-time）：自动识别 Unix 秒/毫秒、ISO、常见日期；默认填入当前本机时间；批量输出本机/ISO/RFC/Unix/Mongo/Excel 等（`BatchWorkbench`）。
   - `number-base`：同时显示 2/8/10/16；可识别 `0x`/`0b`/`0o`（`BatchWorkbench`）。
@@ -93,11 +96,11 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - 新增（it-tools 第二批）：`basic-auth`、`hmac`、`token`、`otp`、`email-norm`、`list-conv`、`json-yaml`、`json-toml`、`sql-format`、`markdown-html`、IPv4×3、`ipv6-ula`、`mac-gen`、`mime`、`http-status`、`ua-parse`、`iban`、`temperature`、`eta`、`numeronym`、`obfuscate`、`nato`、`safelink`、`docker-run`；Hash 增 SHA-384。
   - 新增（it-tools 第三批）：`xml-tool`、`json-csv`、`yaml-toml`、`json-diff`、`password-strength`、`keycode`、`phone`、`ascii-draw`、`random-port`、`unicode-esc`、`qr-code`、`wifi-qr`、`meta-tags`、`svg-placeholder`、`cron-presets`。Chronometer 暂缓（需计时器 UI）。
   - 新增（it-tools 收尾批）：`math-eval`、`git-memo`、`regex-memo`、`base64-hex`、`bcrypt`、`encrypt`、`rsa-keygen`、`bip39`。
-  - `case`：snake / camel / Pascal / kebab / CONSTANT。
+  - `case` / `slugify`：`BatchWorkbench` — 一次给出全部风格 / Slug 变体。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
 - **UI 视觉打磨**：明/暗双色板（`Theme::light` / `Theme::dark`），经 `WindowAppearance` + `observe_window_appearance` 跟随系统；`DEVTOOLS_FORCE_THEME=light|dark` 仅用于截图验收。侧栏每工具独立字形图标（`icons.rs`），分类标签用 `faint`、不可折叠。Linux Xvfb 无 portal 时默认偏 Light；截图见 `/workspace/devtools-linux-verify-theme/`。
-- **通用变换工作台**（`TransformWorkbench`）：左右分栏；**轻量变换实时运行**（编码/解码用方向芯片；UUID「生成」仍为按钮）。切换变换类工具时保留输入并按新工具重算。不自动切工具。
+- **生成工作台**（`TransformWorkbench`）：仅 `uuid` / `ulid` / `token` / `lorem` 等显式生成工具；「生成」按钮。**转换器不再走此台**，统一 `BatchWorkbench`。
 - **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
 - **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
 - **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。

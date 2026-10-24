@@ -52,7 +52,7 @@ pub fn meta() -> ToolMeta {
         id: ids::URL_ENCODE,
         name: "URL Encode",
         category: Category::Encoding,
-        summary: "URL 组件编解码，不是整段 URL 解析。",
+        summary: "URL 组件编码与解码批量展示；含 % 时优先解码。",
         keywords: &["url", "encode", "percent", "uri", "编码", "百分号"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -77,9 +77,52 @@ pub fn decode(input: &str) -> Result<String, UrlEncodeError> {
         })
 }
 
+
+/// Encoded + decoded when percent-encoding is present / always both views.
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    let encoded = encode(trimmed);
+    let mut rows = vec![("编码", encoded.clone())];
+    match decode(trimmed) {
+        Ok(decoded) if decoded != trimmed => {
+            rows.push(("解码", decoded));
+        }
+        Ok(_) => {
+            // already plain; still show decode of encoded form
+            if let Ok(round) = decode(&encoded) {
+                rows.push(("编码后再解码", round));
+            }
+        }
+        Err(_) => {
+            rows.push(("解码", "（无法作为百分号编码解码）".into()));
+        }
+    }
+    // If input itself was encoded, prefer showing decode first usefulness
+    if trimmed.contains('%')
+        && let Ok(decoded) = decode(trimmed)
+    {
+        rows = vec![
+            ("解码", decoded.clone()),
+            ("编码", encode(&decoded)),
+            ("原文", trimmed.to_string()),
+        ];
+    }
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn convert_all_detects_encoded() {
+        let rows = convert_all("a%20b").unwrap();
+        assert_eq!(rows[0].0, "解码");
+        assert_eq!(rows[0].1, "a b");
+    }
 
     #[test]
     fn empty_decode_is_rejected() {

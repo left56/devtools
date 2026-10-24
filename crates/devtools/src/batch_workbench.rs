@@ -13,15 +13,16 @@ use crate::{
 };
 use devtools_core::ids;
 use devtools_tools::{
-    ascii_drawer, base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, chmod_calc,
+    ascii_drawer, base64, base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case,
+    chmod_calc,
     color_tool, cron_presets, csv_tool, data_format, docker_compose, email_norm, encrypt_tool,
-    eta_tool, git_memo, hmac_tool, http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
+    eta_tool, git_memo, hash, hmac_tool, html_escape, http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
     keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
     number_base,
     number_base::Base,
     numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, qr_tool,
-    random_port, regex_memo, roman, rsa_tool, safelink, sql_format, svg_placeholder, temperature,
-    text_stats, timestamp, ua_parse, unicode_escape, wifi_qr, xml_tool,
+    random_port, regex_memo, roman, rsa_tool, safelink, slugify, sql_format, svg_placeholder,
+    temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr, xml_tool,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -185,6 +186,12 @@ impl BatchWorkbench {
     fn title(&self) -> (&'static str, &'static str) {
         match self.tool_id {
             ids::TIMESTAMP => ("日期时间", "自动识别 · 批量格式 · 默认当前时间"),
+            ids::BASE64 => ("Base64", "标准 / URL-safe 编码，可解码时一并展示"),
+            ids::URL_ENCODE => ("URL Encode", "编码与解码批量 · 含 % 优先解码"),
+            ids::HTML_ESCAPE => ("HTML Escape", "转义与反转义批量"),
+            ids::HASH => ("Hash", "MD5/SHA 全家桶 · 弱算法已标注"),
+            ids::CASE => ("Case", "snake / camel / Pascal / kebab / CONSTANT / Title"),
+            ids::SLUGIFY => ("Slugify", "Slug 与规范化变体"),
             ids::NUMBER_BASE => ("进制转换", "同时显示 2/8/10/16 · 可识别 0x/0b/0o"),
             ids::TEXT_STATS => ("文本统计", "字符 · 词 · 行 · 字节"),
             ids::ROMAN => ("罗马数字", "1–3999 · 自动识别方向"),
@@ -197,8 +204,8 @@ impl BatchWorkbench {
             ids::OTP => ("OTP / TOTP", "Base32 密钥 · 可选第二行验证码"),
             ids::EMAIL_NORM => ("邮箱规范化", "小写 · Gmail 点号 · +tag"),
             ids::LIST_CONV => ("列表转换", "排序 · 反转 · 去重 · 连接"),
-            ids::JSON_YAML => ("JSON ↔ YAML", "自动识别 · 双向"),
-            ids::JSON_TOML => ("JSON ↔ TOML", "自动识别 · 双向"),
+            ids::JSON_YAML => ("JSON ↔ YAML", "自动识别 · 给出 JSON/YAML/TOML"),
+            ids::JSON_TOML => ("JSON ↔ TOML", "自动识别 · 给出 JSON/YAML/TOML"),
             ids::SQL_FORMAT => ("SQL 格式化", "轻量美化 / 压缩"),
             ids::MARKDOWN_HTML => ("Markdown → HTML", "CommonMark"),
             ids::IPV4_SUBNET => ("IPv4 子网", "CIDR 计算"),
@@ -219,7 +226,7 @@ impl BatchWorkbench {
             ids::DOCKER_RUN => ("Docker → Compose", "docker run 粗转"),
             ids::XML_TOOL => ("XML / JSON", "美化 · 压缩 · 互转"),
             ids::JSON_CSV => ("JSON ↔ CSV", "对象数组"),
-            ids::YAML_TOML => ("YAML ↔ TOML", "自动识别"),
+            ids::YAML_TOML => ("YAML ↔ TOML", "自动识别 · 给出 JSON/YAML/TOML"),
             ids::JSON_DIFF => ("JSON diff", "用 --- 分隔左右"),
             ids::PASSWORD_STRENGTH => ("口令强度", "离线启发式"),
             ids::KEYCODE => ("按键码", "名称 · keyCode · code"),
@@ -415,6 +422,12 @@ fn copy_chip(id: String, value: String, cx: &mut Context<BatchWorkbench>) -> Sta
 fn placeholder_for(tool_id: &str) -> &'static str {
     match tool_id {
         ids::TIMESTAMP => "Unix 秒/毫秒、ISO 8601 或 YYYY-MM-DD HH:MM:SS",
+        ids::BASE64 => "粘贴文本或 Base64",
+        ids::URL_ENCODE => "粘贴组件文本或百分号编码",
+        ids::HTML_ESCAPE => "粘贴 HTML 或实体文本",
+        ids::HASH => "粘贴要计算摘要的文本",
+        ids::CASE => "粘贴标识符，例如 hello_world",
+        ids::SLUGIFY => "粘贴标题，例如 Hello World",
         ids::NUMBER_BASE => "例如 255、0xff、0b1111",
         ids::TEXT_STATS => "粘贴要统计的文本",
         ids::ROMAN => "例如 1994 或 MCMXCIV",
@@ -427,7 +440,7 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::OTP => "Base32 密钥；可选第二行验证码",
         ids::EMAIL_NORM => "name+tag@gmail.com",
         ids::LIST_CONV => "一行一项，或逗号分隔",
-        ids::JSON_YAML | ids::JSON_TOML => "粘贴 JSON / YAML / TOML",
+        ids::JSON_YAML | ids::JSON_TOML | ids::YAML_TOML => "粘贴 JSON / YAML / TOML",
         ids::SQL_FORMAT => "SELECT * FROM t WHERE …",
         ids::MARKDOWN_HTML => "# 标题\n\n**粗体**",
         ids::IPV4_SUBNET => "192.168.1.10/24",
@@ -462,6 +475,12 @@ fn run_batch(
                     .collect()
             })
             .map_err(|e| e.to_string()),
+        ids::BASE64 => base64::convert_all(input),
+        ids::URL_ENCODE => url_encode::convert_all(input),
+        ids::HTML_ESCAPE => html_escape::convert_all(input),
+        ids::HASH => hash::convert_all(input),
+        ids::CASE => case::convert_all(input),
+        ids::SLUGIFY => slugify::convert_all(input),
         ids::NUMBER_BASE => {
             let (detected, normalized) = number_base::normalize_input(input);
             // Prefer explicit chip when input has no prefix.

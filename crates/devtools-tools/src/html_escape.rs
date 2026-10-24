@@ -28,7 +28,7 @@ pub fn meta() -> ToolMeta {
         id: ids::HTML_ESCAPE,
         name: "HTML Escape",
         category: Category::Encoding,
-        summary: "HTML 实体转义和反转义。",
+        summary: "HTML 实体转义与反转义批量展示；含 & 时优先反转义。",
         keywords: &["html", "escape", "entity", "实体", "转义"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -115,9 +115,46 @@ fn decode_numeric(body: &str) -> Option<char> {
     char::from_u32(value)
 }
 
+
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    let escaped = escape(trimmed);
+    let mut rows = vec![("转义", escaped.clone())];
+    match unescape(trimmed) {
+        Ok(u) if u != trimmed => {
+            rows.insert(0, ("反转义", u.clone()));
+            rows.push(("再转义", escape(&u)));
+        }
+        Ok(_) => {
+            if let Ok(u) = unescape(&escaped) {
+                rows.push(("转义后再反转义", u));
+            }
+        }
+        Err(e) => rows.push(("反转义", format!("（失败：{e}）"))),
+    }
+    if trimmed.contains('&')
+        && let Ok(u) = unescape(trimmed)
+    {
+        rows = vec![
+            ("反转义", u.clone()),
+            ("转义", escape(&u)),
+            ("原文", trimmed.to_string()),
+        ];
+    }
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn convert_all_entity() {
+        let rows = convert_all("&lt;a&gt;").unwrap();
+        assert_eq!(rows[0].1, "<a>");
+    }
 
     #[test]
     fn empty_unescape_is_rejected() {

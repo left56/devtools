@@ -7,11 +7,27 @@ pub fn meta() -> ToolMeta {
         id: ids::SLUGIFY,
         name: "Slugify",
         category: Category::Text,
-        summary: "把标题变成 URL slug：小写、非字母数字变连字符。",
+        summary: "一次输入给出 Slug 与规范化变体。",
         keywords: &["slug", "url", "slugify", "kebab", "路径"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
+}
+
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    let slug = slugify(trimmed);
+    let lower = trimmed.to_ascii_lowercase();
+    let collapsed = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
+    Ok(vec![
+        ("Slug", slug.clone()),
+        ("小写原文", lower),
+        ("空白折叠", collapsed),
+        ("原文", trimmed.to_string()),
+    ])
 }
 
 pub fn slugify(input: &str) -> String {
@@ -43,5 +59,7 @@ mod tests {
         assert_eq!(slugify("déjà-vu"), "d-j-vu"); // non-ascii letters dropped
         assert_eq!(slugify(""), "");
         assert_eq!(slugify("---"), "");
+        let rows = convert_all("Hello World!").unwrap();
+        assert_eq!(rows[0].1, "hello-world");
     }
 }
