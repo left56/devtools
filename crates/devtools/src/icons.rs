@@ -27,6 +27,15 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
         ids::DIFF => "±",
         ids::HTTP_REQUEST => "↗",
         ids::DNS_LOOKUP => "⌖",
+        ids::ULID => "▴",
+        ids::SLUGIFY => "––",
+        ids::LOREM => "¶",
+        ids::TEXT_STATS => "∑",
+        ids::ROMAN => "Ⅻ",
+        ids::PERCENTAGE => "%",
+        ids::CHMOD => "rwx",
+        ids::BINARY => "01",
+        ids::COLOR => "▣",
         _ => "·",
     }
 }

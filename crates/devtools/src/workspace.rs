@@ -1,6 +1,7 @@
 use crate::{
     actions::*,
     icons,
+    batch_workbench::BatchWorkbench,
     inspector_workbench::InspectorWorkbench,
     network_workbench::NetworkWorkbench,
     json_workbench::JsonWorkbench,
@@ -22,6 +23,7 @@ pub struct Workspace {
     workbench: Entity<JsonWorkbench>,
     transform: Entity<TransformWorkbench>,
     inspector: Entity<InspectorWorkbench>,
+    batch: Entity<BatchWorkbench>,
     network: Entity<NetworkWorkbench>,
     search: Entity<TextField>,
     palette_search: Entity<TextField>,
@@ -60,6 +62,7 @@ impl Workspace {
             workbench: cx.new(JsonWorkbench::new),
             transform: cx.new(TransformWorkbench::new),
             inspector: cx.new(InspectorWorkbench::new),
+            batch: cx.new(BatchWorkbench::new),
             network: cx.new(NetworkWorkbench::new),
             search,
             palette_search,
@@ -78,6 +81,8 @@ impl Workspace {
             self.workbench.read(cx).focus_input(window, cx);
         } else if devtools_tools::is_inspector_tool(self.selected) {
             self.inspector.read(cx).focus_input(window, cx);
+        } else if devtools_tools::is_batch_tool(self.selected) {
+            self.batch.read(cx).focus_input(window, cx);
         } else if devtools_tools::is_network_tool(self.selected) {
             self.network.read(cx).focus_input(window, cx);
         } else {
@@ -156,6 +161,9 @@ impl Workspace {
             self.focus_editor(window, cx);
         } else if devtools_tools::is_inspector_tool(id) {
             self.inspector
+                .update(cx, |bench, cx| bench.set_tool(id, window, cx));
+        } else if devtools_tools::is_batch_tool(id) {
+            self.batch
                 .update(cx, |bench, cx| bench.set_tool(id, window, cx));
         } else if devtools_tools::is_network_tool(id) {
             self.network
@@ -238,6 +246,9 @@ impl Workspace {
                 .update(cx, |bench, cx| bench.set_input_text(text, window, cx));
         } else if devtools_tools::is_inspector_tool(self.selected) {
             self.inspector
+                .update(cx, |bench, cx| bench.set_input_text(text, window, cx));
+        } else if devtools_tools::is_batch_tool(self.selected) {
+            self.batch
                 .update(cx, |bench, cx| bench.set_input_text(text, window, cx));
         } else if devtools_tools::is_network_tool(self.selected) {
             self.network
@@ -835,12 +846,16 @@ impl Render for Workspace {
                             .when(devtools_tools::is_inspector_tool(self.selected), |view| {
                                 view.child(self.inspector.clone())
                             })
+                            .when(devtools_tools::is_batch_tool(self.selected), |view| {
+                                view.child(self.batch.clone())
+                            })
                             .when(devtools_tools::is_network_tool(self.selected), |view| {
                                 view.child(self.network.clone())
                             })
                             .when(
                                 self.selected != devtools_core::ids::JSON
                                     && !devtools_tools::is_inspector_tool(self.selected)
+                                    && !devtools_tools::is_batch_tool(self.selected)
                                     && !devtools_tools::is_network_tool(self.selected),
                                 |view| view.child(self.transform.clone()),
                             ),

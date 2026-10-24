@@ -4,13 +4,19 @@
 use crate::theme::{Theme, radius, space};
 use gpui::{prelude::FluentBuilder, *};
 
+/// Shared toolbar control height so primary / secondary / paste align in pane headers.
+const TOOLBAR_BTN_H: f32 = 28.;
+
 /// Primary action (运行 / 生成). Solid accent — the only loud control in a view.
 pub fn primary_button(theme: Theme, id: &'static str, label: &'static str) -> Stateful<Div> {
     div()
         .id(id)
         .cursor_pointer()
-        .px(px(space::LG))
-        .py(px(space::SM - 1.))
+        .h(px(TOOLBAR_BTN_H))
+        .px(px(space::MD))
+        .flex()
+        .items_center()
+        .justify_center()
         .rounded(px(radius::MD))
         .text_sm()
         .font_weight(FontWeight::MEDIUM)
@@ -26,8 +32,11 @@ pub fn button(theme: Theme, id: &'static str, label: &'static str) -> Stateful<D
     div()
         .id(id)
         .cursor_pointer()
+        .h(px(TOOLBAR_BTN_H))
         .px(px(space::MD))
-        .py(px(space::XS + 1.))
+        .flex()
+        .items_center()
+        .justify_center()
         .rounded(px(radius::MD))
         .text_sm()
         .whitespace_nowrap()
@@ -271,15 +280,18 @@ pub fn kv_row(
         )
 }
 
-/// Compact 「粘贴」 for input pane headers (one-shot clipboard → field).
+/// 「粘贴」 for input pane headers — same box size as `button`, accent outline.
 pub fn paste_button(theme: Theme, id: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id.into())
         .cursor_pointer()
-        .px(px(space::SM))
-        .py(px(2.))
-        .rounded(px(radius::SM))
-        .text_xs()
+        .h(px(TOOLBAR_BTN_H))
+        .px(px(space::MD))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(radius::MD))
+        .text_sm()
         .font_weight(FontWeight::MEDIUM)
         .whitespace_nowrap()
         .bg(theme.panel)

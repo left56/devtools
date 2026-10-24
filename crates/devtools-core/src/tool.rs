@@ -21,6 +21,15 @@ pub mod ids {
     pub const DIFF: &str = "diff";
     pub const HTTP_REQUEST: &str = "http-request";
     pub const DNS_LOOKUP: &str = "dns-lookup";
+    pub const ULID: &str = "ulid";
+    pub const SLUGIFY: &str = "slugify";
+    pub const LOREM: &str = "lorem";
+    pub const TEXT_STATS: &str = "text-stats";
+    pub const ROMAN: &str = "roman";
+    pub const PERCENTAGE: &str = "percentage";
+    pub const CHMOD: &str = "chmod";
+    pub const BINARY: &str = "binary";
+    pub const COLOR: &str = "color";
 }
 
 /// Whether running the tool contacts the network.

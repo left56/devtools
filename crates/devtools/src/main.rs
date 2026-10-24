@@ -4,6 +4,7 @@ mod actions;
 mod prefs;
 mod buffer;
 mod json_run;
+mod batch_workbench;
 mod inspector_workbench;
 mod json_workbench;
 mod network_workbench;

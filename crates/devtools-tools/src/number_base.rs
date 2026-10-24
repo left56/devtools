@@ -167,3 +167,78 @@ mod tests {
         assert!(error.message.contains('A'));
     }
 }
+
+/// Convert from an auto-detected or explicit base into all common bases at once.
+pub fn convert_all(input: &str, from: Base) -> Result<Vec<( &'static str, String)>, NumberBaseError> {
+    let trimmed = input.trim();
+    // Parse once via convert to DEC, then fan out.
+    let dec = convert(trimmed, from, Base::DEC)?;
+    Ok(vec![
+        ("二进制 (2)", convert(&dec, Base::DEC, Base::BIN)?),
+        ("八进制 (8)", convert(&dec, Base::DEC, Base::OCT)?),
+        ("十进制 (10)", dec.clone()),
+        ("十六进制 (16)", convert(&dec, Base::DEC, Base::HEX)?),
+    ])
+}
+
+/// Guess base from prefix (`0x`/`0b`/`0o`) or default to decimal.
+pub fn detect_base(input: &str) -> Base {
+    let t = input.trim().trim_start_matches(['+', '-']).trim();
+    let lower = t.to_ascii_lowercase();
+    if lower.starts_with("0x") {
+        Base::HEX
+    } else if lower.starts_with("0b") {
+        Base::BIN
+    } else if lower.starts_with("0o") {
+        Base::OCT
+    } else {
+        Base::DEC
+    }
+}
+
+pub fn normalize_input(input: &str) -> (Base, String) {
+    let base = detect_base(input);
+    let t = input.trim();
+    let (negative, rest) = match t.as_bytes().first() {
+        Some(b'-') => (true, &t[1..]),
+        Some(b'+') => (false, &t[1..]),
+        _ => (false, t),
+    };
+    let rest = rest.trim();
+    let lower = rest.to_ascii_lowercase();
+    let body = if lower.starts_with("0x") || lower.starts_with("0b") || lower.starts_with("0o") {
+        &rest[2..]
+    } else {
+        rest
+    };
+    let mut out = String::new();
+    if negative {
+        out.push('-');
+    }
+    out.push_str(body.trim());
+    (base, out)
+}
+
+#[cfg(test)]
+mod convert_all_tests {
+    use super::*;
+
+    #[test]
+    fn all_bases_from_dec() {
+        let rows = convert_all("255", Base::DEC).unwrap();
+        assert_eq!(rows[2].1, "255");
+        assert_eq!(rows[3].1, "ff");
+        assert_eq!(rows[0].1, "11111111");
+    }
+
+    #[test]
+    fn detect_and_normalize() {
+        assert_eq!(detect_base("0xff"), Base::HEX);
+        assert_eq!(detect_base("0b1010"), Base::BIN);
+        let (b, n) = normalize_input("0xFF");
+        assert_eq!(b, Base::HEX);
+        assert_eq!(n, "FF");
+        let rows = convert_all(&n, b).unwrap();
+        assert_eq!(rows[2].1, "255");
+    }
+}

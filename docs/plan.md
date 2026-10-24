@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0–M5 第一批已落盘；**UI：每工具独立图标、分类常开且淡化、明暗主题跟随系统外观**。M6 分发仍是计划。验证见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-theme/`。
+状态：M0–M5 第一批已落盘；**UI：工具栏按钮等高；Date-time 批量格式（it-tools 风格）；第一批 it-tools 补齐**。M6 分发仍是计划。验证见 [linux-x11-verification.md](linux-x11-verification.md)。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -12,9 +12,10 @@
 
 - 独立明/暗色板（冷灰中性 + 克制蓝 accent），跟随系统外观；不用纯黑/纯白，不用紫色默认。
 - 间距刻度 `theme::space`（4/8/12/16/24/32）、圆角 `theme::radius`（4/6/8）。
-- 共享组件在 `ui.rs`：主按钮 / 次按钮对比、安静 chip、pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
+- 共享组件在 `ui.rs`：主按钮 / 次按钮 /「粘贴」**同一固定高度**（28px）与 `text_sm`；安静 chip 可更密；pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
 - 侧栏分类常开、标签淡化；选中态用左侧强调条而非重边框。
-- 行为不变：轻量工具实时跑；HTTP/DNS/UUID 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
+- **BatchWorkbench**：一输入 → 多行标注结果（每行复制）。`timestamp` / `number-base` / 颜色 / chmod 等走此台。
+- 行为：轻量工具实时跑；HTTP/DNS/UUID/ULID/Lorem 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
 
 参考技能：https://github.com/jaywilburn/refactoring-ui-skill
 
@@ -86,8 +87,9 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - `html-escape`：实体转义/反转义，含数字字符引用。
   - `hash`：MD5 / SHA-1 / SHA-256 / SHA-512；弱算法旁标注「不用于密码或完整性安全」。
   - `uuid`：v4 与可选 v7（`uuid` crate，不自写 RNG）。
-  - `timestamp`：秒/毫秒 ↔ 日期时间；默认本机时区，可改 UTC（`chrono`，无平台日历 API）。
-  - `number-base`：2/8/10/16；非法数字报告字符位置。
+  - `timestamp`（显示名 Date-time）：自动识别 Unix 秒/毫秒、ISO、常见日期；默认填入当前本机时间；批量输出本机/ISO/RFC/Unix/Mongo/Excel 等（`BatchWorkbench`）。
+  - `number-base`：同时显示 2/8/10/16；可识别 `0x`/`0b`/`0o`（`BatchWorkbench`）。
+  - 新增（it-tools 第一批）：`ulid`、`slugify`、`lorem`、`text-stats`、`roman`、`percentage`、`chmod`、`binary`、`color`。
   - `case`：snake / camel / Pascal / kebab / CONSTANT。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
@@ -225,8 +227,17 @@ id 一旦发布给注册表就不要改。显示名可以改。
 | 已实现 | `html-escape` | 编码 | M2，Ready | HTML 实体转义和反转义 |
 | 已实现 | `hash` | 安全 | M2，Ready | MD5、SHA-1、SHA-256、SHA-512。见决策 8 |
 | 已实现 | `uuid` | 生成 | M2，Ready | v4 + v7。使用 `uuid` crate 的随机数，不自己写 RNG |
-| 已实现 | `timestamp` | 时间 | M2，Ready | 秒和毫秒互转。时区默认本机，可改成 UTC。不猜测用户所在城市 |
-| 已实现 | `number-base` | 数据 | M2，Ready | 2/8/10/16。非法数字要指出字符位置 |
+| 已实现 | `timestamp` | 时间 | M2，Ready | **Date-time**：自动识别 + 批量格式（it-tools 风格）。默认当前时间。id 仍为 `timestamp` |
+| 已实现 | `number-base` | 数据 | M2，Ready | 同时显示 2/8/10/16；可识别前缀。非法数字指出位置 |
+| 已实现 | `ulid` | 生成 | it-tools 批，Ready | 显式生成 ULID |
+| 已实现 | `slugify` | 文本 | it-tools 批，Ready | 标题 → URL slug |
+| 已实现 | `lorem` | 生成 | it-tools 批，Ready | 占位段落，显式生成 |
+| 已实现 | `text-stats` | 文本 | it-tools 批，Ready | 字符/词/行/字节 |
+| 已实现 | `roman` | 数据 | it-tools 批，Ready | 罗马数字 ↔ 阿拉伯数字（1–3999） |
+| 已实现 | `percentage` | 数据 | it-tools 批，Ready | 百分比常用算式（两数输入） |
+| 已实现 | `chmod` | 数据 | it-tools 批，Ready | 755 ↔ rwxr-xr-x |
+| 已实现 | `binary` | 编码 | it-tools 批，Ready | 文本 ↔ 二进制/十六进制/码点 |
+| 已实现 | `color` | 数据 | it-tools 批，Ready | #hex ↔ rgb ↔ hsl |
 | 已实现 | `case` | 文本 | M2，Ready | snake、camel、Pascal、kebab、CONSTANT。不处理自然语言复数 |
 | 已实现 | `jwt` | 安全 | M3，Ready | 只解码。`alg` 原文；`alg:none` 标不受信任；可解析的 `exp` 显示时间与是否过期。文案强调未验签，见决策 7 |
 | 已实现 | `regex` | 文本 | M3，Ready | Rust `regex` crate 语法（不是 PCRE）。匹配、捕获组、可选替换；编译错误直接展示 |
@@ -332,6 +343,18 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 - 签名和 notarization 取决于还没定的 Apple 账号，不在代码骨架里假装完成。
 - 在 Linux 或 Windows 上实际编译通过之前，不声明跨平台。届时再给 `gpui` 加对应 feature，并在本文改「约束」。
 
+## it-tools 覆盖
+
+对照 [it-tools](https://it-tools.tech/) / `CorentinTh/it-tools`：
+
+| 状态 | 工具 |
+| --- | --- |
+| 已有 | JSON、Base64、URL encode、HTML entities、Hash、UUID、Date-time、Number base、Case、JWT、Regex、Diff、URL parse、Cron、HTTP、DNS、ULID、Slugify、Lorem、Text stats、Roman、Percentage、Chmod、Text binary、Color |
+| 进行中 / 下一批 | SVG placeholder、Token generator、Hash text variants、BIP39、OTP、IPv4 converters、MAC address、QR text（纯生成）、YAML/XML、SQL minify、Phone parse、ETA 等纯离线小工具 |
+| 暂缓 | Camera、PDF 签名、Wifi QR、Emoji picker、Device info、RSA/加密/bcrypt、MAC 厂商查询 API、Benchmark builder |
+
+设计原则（本轮起）：优先「一输入、多结果、每行可复制」；随机生成类保持显式按钮；打开日期时间时默认当前时间。
+
 ## 新增一个工具
 
 1. 如果没有稳定 id，加到 `devtools_core::ids`。用短横线小写英文，之后不改。
@@ -368,6 +391,6 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 ## 建议的下一步
 
-1. 合并当前 PR（M2–M5）后，在 macOS 真机复验（标题栏融合、触控板/IME、Metal、剪贴板权限）。
-2. 按需做 M5 后续：证书解码、CSV、SQL 格式化。
-3. M6 分发（`.app` / 签名）取决于 Apple 账号。Windows 壳不要抢在 macOS 真机复验前宣称可用。
+1. 继续按 it-tools 名单补离线纯函数工具（见「it-tools 覆盖」下一批）。
+2. 合并当前 PR 后，在 macOS 真机复验（标题栏融合、触控板/IME、Metal、剪贴板权限）。
+3. M5 后续：证书解码、CSV、SQL 格式化。M6 分发取决于 Apple 账号。

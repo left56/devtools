@@ -25,6 +25,15 @@ pub mod timestamp;
 pub mod url_encode;
 pub mod url_parse;
 pub mod uuid_tool;
+pub mod ulid_tool;
+pub mod slugify;
+pub mod lorem;
+pub mod text_stats;
+pub mod roman;
+pub mod percentage;
+pub mod chmod_calc;
+pub mod binary_tool;
+pub mod color_tool;
 
 mod suggest;
 
@@ -40,9 +49,18 @@ pub fn catalog() -> Vec<ToolMeta> {
         html_escape::meta(),
         hash::meta(),
         uuid_tool::meta(),
+        ulid_tool::meta(),
         timestamp::meta(),
         number_base::meta(),
         case::meta(),
+        slugify::meta(),
+        lorem::meta(),
+        text_stats::meta(),
+        roman::meta(),
+        percentage::meta(),
+        chmod_calc::meta(),
+        binary_tool::meta(),
+        color_tool::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -62,8 +80,9 @@ pub fn is_transform_tool(id: &str) -> bool {
             | ids_list::HTML_ESCAPE
             | ids_list::HASH
             | ids_list::UUID
-            | ids_list::TIMESTAMP
-            | ids_list::NUMBER_BASE
+            | ids_list::ULID
+            | ids_list::LOREM
+            | ids_list::SLUGIFY
             | ids_list::CASE
     )
 }
@@ -77,6 +96,21 @@ pub fn is_inspector_tool(id: &str) -> bool {
             | ids_list::CRON
             | ids_list::URL_PARSE
             | ids_list::DIFF
+    )
+}
+
+/// Tools that use the batch workbench (one input → many labeled rows).
+pub fn is_batch_tool(id: &str) -> bool {
+    matches!(
+        id,
+        ids_list::TIMESTAMP
+            | ids_list::NUMBER_BASE
+            | ids_list::TEXT_STATS
+            | ids_list::ROMAN
+            | ids_list::PERCENTAGE
+            | ids_list::CHMOD
+            | ids_list::BINARY
+            | ids_list::COLOR
     )
 }
 
@@ -97,7 +131,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 16);
+        assert_eq!(registry.tools().len(), 25);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -117,6 +151,11 @@ mod tests {
         assert!(is_network_tool(ids::HTTP_REQUEST));
         assert!(is_network_tool(ids::DNS_LOOKUP));
         assert!(is_transform_tool(ids::BASE64));
+        assert!(is_batch_tool(ids::TIMESTAMP));
+        assert!(is_batch_tool(ids::NUMBER_BASE));
+        assert!(!is_transform_tool(ids::TIMESTAMP));
+        assert!(is_transform_tool(ids::ULID));
+        assert!(is_transform_tool(ids::SLUGIFY));
         assert!(!is_transform_tool(ids::JSON));
         assert!(!is_network_tool(ids::URL_PARSE));
     }
