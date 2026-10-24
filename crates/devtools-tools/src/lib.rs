@@ -119,8 +119,7 @@ pub fn catalog() -> Vec<ToolMeta> {
         temperature::meta(),
         eta_tool::meta(),
         basic_auth::meta(),
-        data_format::json_yaml_meta(),
-        data_format::json_toml_meta(),
+        data_format::meta(),
         sql_format::meta(),
         ipv4_tool::subnet_meta(),
         ipv4_tool::addr_meta(),
@@ -133,9 +132,7 @@ pub fn catalog() -> Vec<ToolMeta> {
         safelink::meta(),
         iban_tool::meta(),
         docker_compose::meta(),
-        xml_tool::meta(),
         csv_tool::meta(),
-        data_format::yaml_toml_meta(),
         json_diff_tool::meta(),
         password_strength::meta(),
         keycode_info::meta(),
@@ -210,8 +207,7 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::OTP
             | ids_list::EMAIL_NORM
             | ids_list::LIST_CONV
-            | ids_list::JSON_YAML
-            | ids_list::JSON_TOML
+            | ids_list::DATA_FORMAT
             | ids_list::SQL_FORMAT
             | ids_list::MARKDOWN_HTML
             | ids_list::IPV4_SUBNET
@@ -230,9 +226,7 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::NATO
             | ids_list::SAFELINK
             | ids_list::DOCKER_RUN
-            | ids_list::XML_TOOL
             | ids_list::JSON_CSV
-            | ids_list::YAML_TOML
             | ids_list::JSON_DIFF
             | ids_list::PASSWORD_STRENGTH
             | ids_list::KEYCODE
@@ -319,14 +313,15 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 74);
+        assert_eq!(registry.tools().len(), 71);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
         }
         assert!(registry.get(ids::JWT).is_some());
         assert!(registry.get(ids::HMAC).is_some());
-        assert!(registry.get(ids::JSON_YAML).is_some());
+        assert!(registry.get(ids::DATA_FORMAT).is_some());
+        assert!(registry.get(ids::JSON_YAML).is_none());
         assert_eq!(
             registry.get(ids::HTTP_REQUEST).unwrap().network,
             NetworkUse::Explicit
@@ -340,7 +335,8 @@ mod tests {
         assert!(is_batch_tool(ids::BASIC_AUTH));
         assert!(is_batch_generate_tool(ids::MAC_GEN));
         assert!(is_batch_tool(ids::QR_CODE));
-        assert!(is_batch_tool(ids::XML_TOOL));
+        assert!(is_batch_tool(ids::DATA_FORMAT));
+        assert!(!is_batch_tool(ids::XML_TOOL));
         assert!(is_batch_tool(ids::MATH_EVAL));
         assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));
@@ -354,7 +350,7 @@ mod tests {
         assert!(!is_batch_single_line_tool(ids::BASE64));
         assert!(!is_batch_single_line_tool(ids::HMAC));
         assert!(!is_batch_single_line_tool(ids::LIST_CONV));
-        assert!(!is_batch_single_line_tool(ids::JSON_YAML));
+        assert!(!is_batch_single_line_tool(ids::DATA_FORMAT));
         assert!(!is_batch_single_line_tool(ids::WIFI_QR));
     }
 }

@@ -36,6 +36,8 @@ pub mod ids {
     pub const OTP: &str = "otp";
     pub const EMAIL_NORM: &str = "email-norm";
     pub const LIST_CONV: &str = "list-conv";
+    pub const DATA_FORMAT: &str = "data-format";
+    /// Legacy ids kept for prefs remap → [`DATA_FORMAT`].
     pub const JSON_YAML: &str = "json-yaml";
     pub const JSON_TOML: &str = "json-toml";
     pub const SQL_FORMAT: &str = "sql-format";

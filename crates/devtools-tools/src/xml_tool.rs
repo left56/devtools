@@ -70,14 +70,14 @@ fn rewrite(xml: &str, indent: bool) -> Result<String, String> {
     String::from_utf8(writer.into_inner().into_inner()).map_err(|e| e.to_string())
 }
 
-fn prettify_xml(xml: &str) -> Result<String, String> {
+pub fn prettify_xml(xml: &str) -> Result<String, String> {
     rewrite(xml, true)
 }
-fn minify_xml(xml: &str) -> Result<String, String> {
+pub fn minify_xml(xml: &str) -> Result<String, String> {
     rewrite(xml, false)
 }
 
-fn xml_to_json(xml: &str) -> Result<Value, String> {
+pub fn xml_to_json(xml: &str) -> Result<Value, String> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
@@ -168,7 +168,7 @@ fn insert_child(
     }
 }
 
-fn json_to_xml(v: &Value) -> Result<String, String> {
+pub fn json_to_xml(v: &Value) -> Result<String, String> {
     match v {
         Value::Object(map) if map.len() == 1 => {
             let (k, val) = map.iter().next().unwrap();

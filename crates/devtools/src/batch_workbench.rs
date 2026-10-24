@@ -15,14 +15,16 @@ use devtools_core::ids;
 use devtools_tools::{
     ascii_drawer, base64, base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case,
     chmod_calc,
-    color_tool, cron_presets, csv_tool, data_format, docker_compose, email_norm, encrypt_tool,
+    color_tool, cron_presets, csv_tool,
+    data_format::{self, FormatKind},
+    docker_compose, email_norm, encrypt_tool,
     eta_tool, git_memo, hash, hmac_tool, html_escape, http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
     keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
     number_base,
     number_base::Base,
     numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, quantity, qr_tool,
     random_port, regex_memo, roman, rsa_tool, safelink, slugify, sql_format, svg_placeholder,
-    temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr, xml_tool,
+    temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -35,6 +37,9 @@ pub struct BatchWorkbench {
     num_from: Base,
     bip39_words: usize,
     quantity: usize,
+    /// `None` = auto-detect for 数据格式.
+    data_in: Option<FormatKind>,
+    data_out: FormatKind,
     result_scroll: ScrollHandle,
 }
 
@@ -61,6 +66,8 @@ impl BatchWorkbench {
             num_from: Base::DEC,
             bip39_words: 12,
             quantity: 1,
+            data_in: None,
+            data_out: FormatKind::default_output(),
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -90,6 +97,8 @@ impl BatchWorkbench {
             self.error = None;
             self.notice = "";
             self.quantity = 1;
+            self.data_in = None;
+            self.data_out = FormatKind::default_output();
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
                 field.set_multiline(
@@ -229,7 +238,7 @@ impl BatchWorkbench {
             cx.notify();
             return;
         }
-        match run_batch(self.tool_id, &input, self.num_from) {
+        match run_batch(self.tool_id, &input, self.num_from, self.data_in, self.data_out) {
             Ok(rows) => {
                 self.rows = rows;
                 self.error = None;
@@ -263,9 +272,8 @@ impl BatchWorkbench {
             ids::OTP => ("OTP / TOTP", "Base32 密钥 · 可选第二行验证码"),
             ids::EMAIL_NORM => ("邮箱规范化", "小写 · Gmail 点号 · +tag"),
             ids::LIST_CONV => ("列表转换", "排序 · 反转 · 去重 · 连接"),
-            ids::JSON_YAML => ("JSON ↔ YAML", "自动识别 · 给出 JSON/YAML/TOML"),
-            ids::JSON_TOML => ("JSON ↔ TOML", "自动识别 · 给出 JSON/YAML/TOML"),
-            ids::SQL_FORMAT => ("SQL 格式化", "轻量美化 / 压缩"),
+            ids::DATA_FORMAT => ("数据格式", "自动识别 JSON/YAML/TOML/XML · 可选输入/输出类型"),
+                        ids::SQL_FORMAT => ("SQL 格式化", "轻量美化 / 压缩"),
             ids::MARKDOWN_HTML => ("Markdown → HTML", "CommonMark"),
             ids::IPV4_SUBNET => ("IPv4 子网", "CIDR 计算"),
             ids::IPV4_ADDR => ("IPv4 地址", "点分 · 整数 · 十六进制"),
@@ -283,10 +291,8 @@ impl BatchWorkbench {
             ids::NATO => ("NATO 音标", "拼读字母"),
             ids::SAFELINK => ("Safelink 解码", "提取真实 URL"),
             ids::DOCKER_RUN => ("Docker → Compose", "docker run 粗转"),
-            ids::XML_TOOL => ("XML / JSON", "美化 · 压缩 · 互转"),
-            ids::JSON_CSV => ("JSON ↔ CSV", "对象数组"),
-            ids::YAML_TOML => ("YAML ↔ TOML", "自动识别 · 给出 JSON/YAML/TOML"),
-            ids::JSON_DIFF => ("JSON diff", "用 --- 分隔左右"),
+                        ids::JSON_CSV => ("JSON ↔ CSV", "对象数组"),
+                        ids::JSON_DIFF => ("JSON diff", "用 --- 分隔左右"),
             ids::PASSWORD_STRENGTH => ("口令强度", "离线启发式"),
             ids::KEYCODE => ("按键码", "名称 · keyCode · code"),
             ids::PHONE => ("电话整理", "E.164 猜测"),
@@ -313,7 +319,48 @@ impl BatchWorkbench {
     fn options_bar(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let mut row = div().flex().flex_wrap().items_center().gap_2();
-        if self.tool_id == ids::NUMBER_BASE {
+        if self.tool_id == ids::DATA_FORMAT {
+            row = row.child(div().text_xs().text_color(theme.muted).child("输入"));
+            let auto_active = self.data_in.is_none();
+            row = row.child(chip(theme, "data-in-auto", "自动", auto_active).on_click(
+                cx.listener(|this, _, _, cx| {
+                    this.data_in = None;
+                    this.live_refresh(cx);
+                }),
+            ));
+            for kind in FormatKind::ALL {
+                let active = self.data_in == Some(kind);
+                let id = format!("data-in-{}", kind.label());
+                row = row.child(chip(theme, id, kind.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.data_in = Some(kind);
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+            row = row.child(div().text_xs().text_color(theme.muted).child("输出"));
+            for kind in FormatKind::ALL {
+                let active = self.data_out == kind;
+                let id = format!("data-out-{}", kind.label());
+                row = row.child(chip(theme, id, kind.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.data_out = kind;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+            if let Some(detected) = {
+                let input = self.input.read(cx).buffer.text().to_owned();
+                data_format::detect(&input)
+            } {
+                row = row.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted)
+                        .child(format!("识别为 {}", detected.label())),
+                );
+            }
+        } else if self.tool_id == ids::NUMBER_BASE {
             row = row.child(div().text_xs().text_color(theme.muted).child("从"));
             for base in Base::ALL {
                 let active = self.num_from == base;
@@ -664,7 +711,7 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::OTP => "Base32 密钥；可选第二行验证码",
         ids::EMAIL_NORM => "name+tag@gmail.com",
         ids::LIST_CONV => "一行一项，或逗号分隔",
-        ids::JSON_YAML | ids::JSON_TOML | ids::YAML_TOML => "粘贴 JSON / YAML / TOML",
+        ids::DATA_FORMAT => "粘贴 JSON / YAML / TOML / XML",
         ids::SQL_FORMAT => "SELECT * FROM t WHERE …",
         ids::MARKDOWN_HTML => "# 标题  **粗体**",
         ids::IPV4_SUBNET => "192.168.1.10/24",
@@ -694,6 +741,8 @@ fn run_batch(
     tool_id: &str,
     input: &str,
     num_from: Base,
+    data_in: Option<FormatKind>,
+    data_out: FormatKind,
 ) -> Result<Vec<(&'static str, String)>, String> {
     match tool_id {
         ids::TIMESTAMP => timestamp::convert_all(input)
@@ -736,8 +785,7 @@ fn run_batch(
         ids::OTP => otp_tool::convert_all(input),
         ids::EMAIL_NORM => email_norm::convert_all(input),
         ids::LIST_CONV => list_conv::convert_all(input),
-        ids::JSON_YAML => data_format::json_yaml_all(input),
-        ids::JSON_TOML => data_format::json_toml_all(input),
+        ids::DATA_FORMAT => data_format::convert_row(input, data_in, data_out),
         ids::SQL_FORMAT => sql_format::convert_all(input),
         ids::MARKDOWN_HTML => markdown_html::convert_all(input),
         ids::IPV4_SUBNET => ipv4_tool::subnet_all(input),
@@ -754,10 +802,8 @@ fn run_batch(
         ids::NATO => nato_alpha::convert_all(input),
         ids::SAFELINK => safelink::convert_all(input),
         ids::DOCKER_RUN => docker_compose::convert_all(input),
-        ids::XML_TOOL => xml_tool::convert_all(input),
-        ids::JSON_CSV => csv_tool::convert_all(input),
-        ids::YAML_TOML => data_format::yaml_toml_all(input),
-        ids::JSON_DIFF => json_diff_tool::convert_all(input),
+                ids::JSON_CSV => csv_tool::convert_all(input),
+                ids::JSON_DIFF => json_diff_tool::convert_all(input),
         ids::PASSWORD_STRENGTH => password_strength::convert_all(input),
         ids::KEYCODE => keycode_info::convert_all(input),
         ids::PHONE => phone_tool::convert_all(input),

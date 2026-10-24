@@ -55,10 +55,21 @@ impl Prefs {
     }
 
     fn normalized(&self) -> Self {
-        let mut favorites = self.favorites.clone();
+        let mut favorites: Vec<String> = self
+            .favorites
+            .iter()
+            .map(|id| data_format_remap(id).to_owned())
+            .collect();
         favorites.sort();
         favorites.dedup();
-        let mut recents = self.recents.clone();
+        let mut recents: Vec<RecentEntry> = self
+            .recents
+            .iter()
+            .map(|e| RecentEntry {
+                id: data_format_remap(&e.id).to_owned(),
+                used_at: e.used_at,
+            })
+            .collect();
         // Newest first; keep first occurrence of each id.
         recents.sort_by_key(|a| std::cmp::Reverse(a.used_at));
         let mut seen = std::collections::BTreeSet::new();
@@ -99,7 +110,11 @@ impl Prefs {
     }
 }
 
-pub fn now_secs() -> u64 {
+pub fn data_format_remap(id: &str) -> &str {
+    devtools_tools::data_format::remap_legacy_id(id)
+}
+
+fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -199,6 +214,15 @@ mod tests {
     fn rejects_multiline_ids() {
         let bad = r#"{"favorites":["json\nsecret"],"recents":[]}"#;
         assert!(Prefs::from_json(bad).is_err());
+    }
+
+    #[test]
+    fn remaps_legacy_data_format_ids() {
+        let raw = r#"{"favorites":["json-yaml","xml-tool"],"recents":[{"id":"json-toml","used_at":1},{"id":"yaml-toml","used_at":2}]}"#;
+        let prefs = Prefs::from_json(raw).unwrap();
+        assert!(prefs.is_favorite("data-format"));
+        assert!(!prefs.is_favorite("json-yaml"));
+        assert_eq!(prefs.recent_ids(), vec!["data-format"]);
     }
 
     #[test]
