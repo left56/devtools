@@ -163,11 +163,11 @@ impl NetworkWorkbench {
         cx.notify();
     }
 
-    fn title(&self) -> (&'static str, &'static str) {
+    fn title(&self) -> &'static str {
         match self.tool_id {
-            ids::HTTP_REQUEST => ("HTTP Request", "显式联网 · 打开不发请求"),
-            ids::DNS_LOOKUP => ("DNS Lookup", "显式联网 · A/AAAA · 打开不查询"),
-            _ => ("网络工具", "显式联网"),
+            ids::HTTP_REQUEST => "HTTP Request",
+            ids::DNS_LOOKUP => "DNS Lookup",
+            _ => "网络工具",
         }
     }
 
@@ -211,7 +211,7 @@ impl NetworkWorkbench {
                 .justify_center()
                 .child(empty_hint(
                     theme,
-                    "尚未运行 · 确认横幅后点击「运行」才会访问网络",
+                    "点击「运行」查看结果",
                 ))
                 .into_any_element(),
             NetworkState::Http(response) => {
@@ -342,7 +342,7 @@ fn primary_placeholder(tool_id: &str) -> &'static str {
 impl Render for NetworkWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
-        let (title, subtitle) = self.title();
+        let title = self.title();
         let is_http = self.tool_id == ids::HTTP_REQUEST;
 
         div()
@@ -357,15 +357,11 @@ impl Render for NetworkWorkbench {
             .p(px(crate::theme::space::XL))
             .child(
                 workbench_title(theme, title, "")
-                    .child(status_chip(theme, subtitle, StatusKind::Warning))
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
                         view.child(status_chip(theme, self.notice, StatusKind::Success))
                     }),
             )
-            .child(banner(theme, StatusKind::Warning,
-                "会访问网络 · 打开本工具不会发请求；只有点击「运行」才会联网。响应与 URL 不会写入收藏/最近使用。",
-            ))
             .when(is_http, |view| view.child(self.method_bar(cx)))
             .child(
                 div()
@@ -411,12 +407,6 @@ impl Render for NetworkWorkbench {
                                                 this.paste_into_primary(window, cx);
                                             }),
                                         ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.muted)
-                                            .child("不会自动请求"),
                                     ),
                             )
                             .child(div().flex_1().min_h_0().p_2().child(self.primary.clone())),
@@ -462,8 +452,7 @@ impl Render for NetworkWorkbench {
                             .flex_1()
                             .child(
                                 pane_header(theme)
-                                    .child(pane_title(theme, "结果"))
-                                    .child(status_chip(theme, "显式联网", StatusKind::Warning)),
+                                    .child(pane_title(theme, "结果")),
                             )
                             .child(self.result_view(cx)),
                     ),
