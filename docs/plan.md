@@ -18,7 +18,7 @@
 - 共享组件在 `ui.rs`：主按钮 / 次按钮 /「粘贴」**同一固定高度**（28px）与 `text_sm`；安静 chip 可更密；pane header + `pane_title`、`workbench_title`、空状态 `empty_hint`。
 - 侧栏分类常开、标签淡化；选中态用左侧强调条而非重边框。
 - **BatchWorkbench**：一输入 → 多行标注结果（每行复制）。**转换器统一走此台**（与 Date-time 同设计：能自动识别则识别，批量给出相关输出）。`timestamp` / `base64` / `hash` / `case` / 数据格式 / 颜色 / chmod 等。
-- **单行输入**：语义上只接受单值的转换器（CIDR、IPv4、状态码、MIME、颜色、进制等，见 `is_batch_single_line_tool`）用紧凑单行输入框，不用高多行文本框；文档/列表/载荷/多字段协议仍用多行。
+- **单行输入**：语义上只接受单值的转换器（CIDR、IPv4、状态码、MIME、颜色、进制等，见 `is_batch_single_line_tool`）用 **上下布局**（it-tools Date-time）：顶栏单行输入 + 下方「标签 | 单行值 | 复制」列表，不用高多行文本框，也不用大「结果」面板框住；文档/列表/载荷/多字段协议仍用左右多行布局。
 - 行为：轻量工具实时跑；HTTP/DNS/UUID/ULID/Lorem 显式运行；输入框「粘贴」；无顶栏剪贴板条；无后台剪贴板监听。
 
 参考技能：https://github.com/jaywilburn/refactoring-ui-skill

@@ -8,7 +8,7 @@ use crate::{
     theme::{self, Theme},
     ui::{
         button, chip, empty_hint, multiline_mono, pane, pane_header, pane_title, paste_button,
-        primary_button, status_chip, workbench_title, StatusKind,
+        primary_button, single_line, status_chip, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -477,6 +477,7 @@ impl BatchWorkbench {
         ))
     }
 
+    /// Multi-line / generate tools: values may wrap; enclosed in a pane.
     fn result_pane(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let header = pane_header(theme).child(pane_title(theme, "结果"));
@@ -546,6 +547,73 @@ impl BatchWorkbench {
             );
         }
         pane_view
+    }
+
+    /// it-tools date-converter style: no enclosing result pane; compact
+    /// single-line rows (label | value | 复制) under the input.
+    fn single_line_results(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = Theme::get(cx);
+        let list = div()
+            .id("batch-single-results")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .overflow_y_scroll()
+            .track_scroll(&self.result_scroll)
+            .flex()
+            .flex_col()
+            .gap(px(theme::space::SM));
+        if self.rows.is_empty() && self.error.is_none() {
+            return list.child(
+                div()
+                    .pt(px(theme::space::LG))
+                    .text_sm()
+                    .text_color(theme.faint)
+                    .child("输入后显示全部格式"),
+            );
+        }
+        let rows: Vec<AnyElement> = self
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(i, (label, value))| {
+                let copy = value.clone();
+                div()
+                    .id(SharedString::from(format!("batch-sl-row-{i}")))
+                    .flex()
+                    .items_center()
+                    .gap(px(theme::space::SM))
+                    .child(
+                        div()
+                            .w(px(120.))
+                            .flex_shrink_0()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.muted)
+                            .child(single_line(*label)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h(px(36.))
+                            .px(px(theme::space::SM))
+                            .flex()
+                            .items_center()
+                            .rounded(px(theme::radius::SM))
+                            .bg(theme.elevated)
+                            .border_1()
+                            .border_color(theme.border_subtle)
+                            .font(crate::theme::monospace())
+                            .text_sm()
+                            .text_color(theme.text)
+                            .child(single_line(value.as_str())),
+                    )
+                    .child(copy_chip(format!("batch-sl-copy-{i}"), copy, cx))
+                    .into_any_element()
+            })
+            .collect();
+        list.children(rows)
     }
 }
 
@@ -800,49 +868,98 @@ impl Render for BatchWorkbench {
                 !devtools_tools::is_batch_generate_tool(self.tool_id)
                     && devtools_tools::is_batch_single_line_tool(self.tool_id),
                 |view| {
+                    // Top-bottom (it-tools date-converter): compact input, then
+                    // labeled single-line rows — no big enclosing result pane.
                     view.child(
-                        pane(theme)
+                        div()
                             .flex_shrink_0()
-                            .child(self.input_header(cx))
+                            .flex()
+                            .flex_col()
+                            .gap(px(theme::space::SM))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(theme::space::SM))
+                                    .child(
+                                        paste_button(theme, "batch-paste").on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(
+                                                |this, _: &MouseDownEvent, window, cx| {
+                                                    cx.stop_propagation();
+                                                    this.paste_into_input(window, cx);
+                                                },
+                                            ),
+                                        ),
+                                    )
+                                    .when(self.tool_id == ids::TIMESTAMP, |row| {
+                                        row.child(
+                                            primary_button(theme, "batch-now", "现在")
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    cx.listener(
+                                                        |this, _: &MouseDownEvent, window, cx| {
+                                                            cx.stop_propagation();
+                                                            this.seed_now(window, cx);
+                                                        },
+                                                    ),
+                                                ),
+                                        )
+                                    })
+                                    .child(button(theme, "batch-clear", "清空").on_click(
+                                        cx.listener(|this, _, window, cx| {
+                                            this.clear(window, cx)
+                                        }),
+                                    )),
+                            )
                             .child(
                                 div()
                                     .h(px(40.))
                                     .min_w_0()
-                                    .px_3()
-                                    .pb_2()
+                                    .w_full()
+                                    .px(px(theme::space::SM))
+                                    .rounded(px(theme::radius::MD))
+                                    .bg(theme.panel)
+                                    .border_1()
+                                    .border_color(theme.border)
                                     .child(self.input.clone()),
                             ),
                     )
+                    .child(self.single_line_results(cx))
                 },
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .flex()
-                    .gap(px(theme::space::MD))
-                    .when(
-                        !devtools_tools::is_batch_generate_tool(self.tool_id)
-                            && !devtools_tools::is_batch_single_line_tool(self.tool_id),
-                        |view| {
-                            view.child(
-                                pane(theme)
-                                    .w(relative(0.38))
-                                    .flex_shrink_0()
-                                    .child(self.input_header(cx))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_h_0()
-                                            .min_w_0()
-                                            .p_3()
-                                            .child(self.input.clone()),
-                                    ),
+            .when(
+                !devtools_tools::is_batch_single_line_tool(self.tool_id),
+                |view| {
+                    view.child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .min_w_0()
+                            .flex()
+                            .gap(px(theme::space::MD))
+                            .when(
+                                !devtools_tools::is_batch_generate_tool(self.tool_id),
+                                |inner| {
+                                    inner.child(
+                                        pane(theme)
+                                            .w(relative(0.38))
+                                            .flex_shrink_0()
+                                            .child(self.input_header(cx))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_h_0()
+                                                    .min_w_0()
+                                                    .p_3()
+                                                    .child(self.input.clone()),
+                                            ),
+                                    )
+                                },
                             )
-                        },
+                            .child(self.result_pane(cx)),
                     )
-                    .child(self.result_pane(cx)),
+                },
             )
     }
 }
