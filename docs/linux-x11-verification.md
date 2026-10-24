@@ -115,3 +115,11 @@ cargo run -p devtools
 ## UX2（2026-10-23）
 
 去掉顶栏剪贴板条；输入框「粘贴」；轻量工具实时运行。截图：`/workspace/devtools-linux-verify-ux2/`（Regex 模式+替换置顶可见、Base64 输入即编码、Ctrl+Shift+V 粘贴、HTTP 仍有「运行」+ 联网横幅）。
+
+
+## 明暗主题与侧栏图标（2026-10-24）
+
+- `Theme::light` / `Theme::dark`；`Theme::for_appearance(window.appearance())` + `observe_window_appearance`。
+- Linux X11：GPUI 初始常为 Light；有 xdg-desktop-portal 时随 `color-scheme` 更新。裸 Xvfb 无 portal → 默认 Light。验收可用 `DEVTOOLS_FORCE_THEME=dark|light` 强制色板（不进 prefs）。
+- 侧栏：分类不可折叠，标签用 `theme.faint`；每工具独立字形（`{}` / `64` / `%` / `<>` / `#` / `◈` / `◷` / `0x` / `Aa` / `◉` / `.*` / `⟳` / `◎` / `±` / `↗` / `⌖`），分类淡色 tint。
+- 截图：`/workspace/devtools-linux-verify-theme/final-light-sidebar.png`、`final-dark-sidebar.png`、`final-*-sidebar-crop.png`。

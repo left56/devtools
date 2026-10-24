@@ -4,8 +4,7 @@ use crate::theme::Theme;
 use gpui::*;
 
 /// Primary action (运行 / 编码 / 格式化). Accent fill.
-pub fn primary_button(id: &'static str, label: &'static str) -> Stateful<Div> {
-    let theme = Theme::dark();
+pub fn primary_button(theme: Theme, id: &'static str, label: &'static str) -> Stateful<Div> {
     div()
         .id(id)
         .cursor_pointer()
@@ -15,14 +14,13 @@ pub fn primary_button(id: &'static str, label: &'static str) -> Stateful<Div> {
         .text_sm()
         .whitespace_nowrap()
         .bg(theme.accent)
-        .text_color(rgb(0x0e1016))
-        .hover(move |s| s.bg(rgb(0x8bb0ff)))
+        .text_color(theme.accent_fg)
+        .hover(move |s| s.bg(theme.accent_hover))
         .child(label)
 }
 
 /// Secondary / ghost action (清空、复制、次要操作).
-pub fn button(id: &'static str, label: &'static str) -> Stateful<Div> {
-    let theme = Theme::dark();
+pub fn button(theme: Theme, id: &'static str, label: &'static str) -> Stateful<Div> {
     div()
         .id(id)
         .cursor_pointer()
@@ -40,8 +38,12 @@ pub fn button(id: &'static str, label: &'static str) -> Stateful<Div> {
 }
 
 /// Compact option chip (字母表 / 时区 / 算法).
-pub fn chip(id: impl Into<SharedString>, label: impl Into<SharedString>, active: bool) -> Stateful<Div> {
-    let theme = Theme::dark();
+pub fn chip(
+    theme: Theme,
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    active: bool,
+) -> Stateful<Div> {
     let id = id.into();
     div()
         .id(id)
@@ -54,21 +56,18 @@ pub fn chip(id: impl Into<SharedString>, label: impl Into<SharedString>, active:
         .bg(if active { theme.selected } else { theme.panel })
         .text_color(if active { theme.accent } else { theme.muted })
         .border_1()
-        .border_color(if active { theme.accent_muted } else { theme.border })
+        .border_color(if active {
+            theme.accent_muted
+        } else {
+            theme.border
+        })
         .hover(move |s| s.bg(theme.selected))
         .child(label.into())
 }
 
 /// Non-interactive status pill (离线 · 已更新结果).
-pub fn status_chip(label: impl Into<SharedString>, kind: StatusKind) -> Div {
-    let theme = Theme::dark();
-    let (fg, bg, border) = match kind {
-        StatusKind::Neutral => (theme.muted, theme.elevated, theme.border),
-        StatusKind::Accent => (theme.accent, theme.selected, theme.accent_muted),
-        StatusKind::Warning => (theme.warning, theme.warning_bg, rgb(0x4a3c20)),
-        StatusKind::Error => (theme.error, theme.error_bg, rgb(0x4a2a2a)),
-        StatusKind::Success => (theme.success, theme.success_bg, rgb(0x2a3c30)),
-    };
+pub fn status_chip(theme: Theme, label: impl Into<SharedString>, kind: StatusKind) -> Div {
+    let (fg, bg, border) = status_colors(theme, kind);
     div()
         .px_2()
         .py_0p5()
@@ -91,16 +90,19 @@ pub enum StatusKind {
     Success,
 }
 
-/// Compact warning / error banner for inspector results.
-pub fn banner(kind: StatusKind, text: impl Into<SharedString>) -> Div {
-    let theme = Theme::dark();
-    let (fg, bg, border) = match kind {
-        StatusKind::Warning => (theme.warning, theme.warning_bg, rgb(0x4a3c20)),
-        StatusKind::Error => (theme.error, theme.error_bg, rgb(0x4a2a2a)),
-        StatusKind::Success => (theme.success, theme.success_bg, rgb(0x2a3c30)),
-        StatusKind::Accent => (theme.accent, theme.selected, theme.accent_muted),
+fn status_colors(theme: Theme, kind: StatusKind) -> (Rgba, Rgba, Rgba) {
+    match kind {
         StatusKind::Neutral => (theme.muted, theme.elevated, theme.border),
-    };
+        StatusKind::Accent => (theme.accent, theme.selected, theme.accent_muted),
+        StatusKind::Warning => (theme.warning, theme.warning_bg, theme.border),
+        StatusKind::Error => (theme.error, theme.error_bg, theme.border),
+        StatusKind::Success => (theme.success, theme.success_bg, theme.border),
+    }
+}
+
+/// Compact warning / error banner for inspector results.
+pub fn banner(theme: Theme, kind: StatusKind, text: impl Into<SharedString>) -> Div {
+    let (fg, bg, border) = status_colors(theme, kind);
     div()
         .w_full()
         .px_3()
@@ -114,8 +116,7 @@ pub fn banner(kind: StatusKind, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
-pub fn pane() -> Div {
-    let theme = Theme::dark();
+pub fn pane(theme: Theme) -> Div {
     div()
         .h_full()
         .min_w_0()
@@ -130,8 +131,7 @@ pub fn pane() -> Div {
 }
 
 /// Content-sized card (does not force `h_full`). Used for stacked JWT panes.
-pub fn card() -> Div {
-    let theme = Theme::dark();
+pub fn card(theme: Theme) -> Div {
     div()
         .w_full()
         .min_w_0()
@@ -144,8 +144,7 @@ pub fn card() -> Div {
         .overflow_hidden()
 }
 
-pub fn pane_header() -> Div {
-    let theme = Theme::dark();
+pub fn pane_header(theme: Theme) -> Div {
     div()
         .h(px(36.))
         .flex_shrink_0()
@@ -160,12 +159,12 @@ pub fn pane_header() -> Div {
 
 /// Fixed-width label + mono value box used by URL Parse (and similar KV UIs).
 pub fn kv_row(
+    theme: Theme,
     id: impl Into<SharedString>,
     label: impl Into<SharedString>,
     value: impl Into<SharedString>,
     empty: bool,
 ) -> Stateful<Div> {
-    let theme = Theme::dark();
     let value = value.into();
     div()
         .id(id.into())
@@ -204,8 +203,7 @@ pub fn kv_row(
 }
 
 /// Compact 「粘贴」 control for input pane headers (one-shot clipboard → field).
-pub fn paste_button(id: impl Into<SharedString>) -> Stateful<Div> {
-    let theme = Theme::dark();
+pub fn paste_button(theme: Theme, id: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id.into())
         .cursor_pointer()

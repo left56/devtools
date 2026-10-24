@@ -9,6 +9,7 @@ mod json_workbench;
 mod network_workbench;
 mod text_field;
 mod theme;
+mod icons;
 mod transform_workbench;
 mod tree_state;
 mod ui;
@@ -39,7 +40,7 @@ fn main() {
                     focus: true,
                     ..WindowOptions::default()
                 },
-                |_, cx| cx.new(Workspace::new),
+                |window, cx| cx.new(|cx| Workspace::new(window, cx)),
             )
             .expect("open the main window");
         window

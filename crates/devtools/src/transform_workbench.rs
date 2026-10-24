@@ -252,19 +252,19 @@ impl TransformWorkbench {
     }
 
     fn options_bar(&self, cx: &mut Context<Self>) -> Div {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let mut row = div().flex().flex_wrap().items_center().gap_2();
         match self.tool_id {
             ids::BASE64 => {
                 row = row
                     .child(div().text_xs().text_color(theme.muted).child("字母表"))
-                    .child(chip("b64-std", "标准", !self.base64_url_safe).on_click(
+                    .child(chip(theme, "b64-std", "标准", !self.base64_url_safe).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.base64_url_safe = false;
                             this.live_refresh(cx);
                         }),
                     ))
-                    .child(chip("b64-url", "URL-safe", self.base64_url_safe).on_click(
+                    .child(chip(theme, "b64-url", "URL-safe", self.base64_url_safe).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.base64_url_safe = true;
                             this.live_refresh(cx);
@@ -272,8 +272,7 @@ impl TransformWorkbench {
                     ))
                     .child(div().text_xs().text_color(theme.muted).child("方向"))
                     .child(
-                        chip(
-                            "b64-enc",
+                        chip(theme, "b64-enc",
                             "编码",
                             matches!(self.live_mode, TransformAction::Encode),
                         )
@@ -283,8 +282,7 @@ impl TransformWorkbench {
                         })),
                     )
                     .child(
-                        chip(
-                            "b64-dec",
+                        chip(theme, "b64-dec",
                             "解码",
                             matches!(self.live_mode, TransformAction::Decode),
                         )
@@ -303,8 +301,7 @@ impl TransformWorkbench {
                 row = row
                     .child(div().text_xs().text_color(theme.muted).child("方向"))
                     .child(
-                        chip(
-                            format!("{prefix}-enc"),
+                        chip(theme, format!("{prefix}-enc"),
                             "编码",
                             matches!(self.live_mode, TransformAction::Encode),
                         )
@@ -314,8 +311,7 @@ impl TransformWorkbench {
                         })),
                     )
                     .child(
-                        chip(
-                            format!("{prefix}-dec"),
+                        chip(theme, format!("{prefix}-dec"),
                             "解码",
                             matches!(self.live_mode, TransformAction::Decode),
                         )
@@ -340,7 +336,7 @@ impl TransformWorkbench {
                     } else {
                         algo.label().to_string()
                     };
-                    row = row.child(chip(id, label, active).on_click(cx.listener(
+                    row = row.child(chip(theme, id, label, active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.hash_algo = algo;
                             this.live_refresh(cx);
@@ -356,7 +352,7 @@ impl TransformWorkbench {
                         UuidVersion::V4 => "uuid-v4",
                         UuidVersion::V7 => "uuid-v7",
                     };
-                    row = row.child(chip(id, version.label(), active).on_click(cx.listener(
+                    row = row.child(chip(theme, id, version.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.uuid_version = version;
                             cx.notify();
@@ -367,26 +363,26 @@ impl TransformWorkbench {
             ids::TIMESTAMP => {
                 row = row
                     .child(div().text_xs().text_color(theme.muted).child("单位"))
-                    .child(chip("ts-sec", "秒", matches!(self.ts_unit, Unit::Seconds)).on_click(
+                    .child(chip(theme, "ts-sec", "秒", matches!(self.ts_unit, Unit::Seconds)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_unit = Unit::Seconds;
                             this.live_refresh(cx);
                         }),
                     ))
-                    .child(chip("ts-ms", "毫秒", matches!(self.ts_unit, Unit::Milliseconds)).on_click(
+                    .child(chip(theme, "ts-ms", "毫秒", matches!(self.ts_unit, Unit::Milliseconds)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_unit = Unit::Milliseconds;
                             this.live_refresh(cx);
                         }),
                     ))
                     .child(div().text_xs().text_color(theme.muted).child("时区"))
-                    .child(chip("ts-local", "本机", matches!(self.ts_zone, Zone::Local)).on_click(
+                    .child(chip(theme, "ts-local", "本机", matches!(self.ts_zone, Zone::Local)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_zone = Zone::Local;
                             this.live_refresh(cx);
                         }),
                     ))
-                    .child(chip("ts-utc", "UTC", matches!(self.ts_zone, Zone::Utc)).on_click(
+                    .child(chip(theme, "ts-utc", "UTC", matches!(self.ts_zone, Zone::Utc)).on_click(
                         cx.listener(|this, _, _, cx| {
                             this.ts_zone = Zone::Utc;
                             this.live_refresh(cx);
@@ -394,8 +390,7 @@ impl TransformWorkbench {
                     ))
                     .child(div().text_xs().text_color(theme.muted).child("方向"))
                     .child(
-                        chip(
-                            "ts-from",
+                        chip(theme, "ts-from",
                             "时间戳 → 时间",
                             matches!(self.live_mode, TransformAction::FromUnix),
                         )
@@ -405,8 +400,7 @@ impl TransformWorkbench {
                         })),
                     )
                     .child(
-                        chip(
-                            "ts-to",
+                        chip(theme, "ts-to",
                             "时间 → 时间戳",
                             matches!(self.live_mode, TransformAction::ToUnix),
                         )
@@ -421,7 +415,7 @@ impl TransformWorkbench {
                 for base in Base::ALL {
                     let active = self.num_from == base;
                     let id = format!("from-{}", base.label());
-                    row = row.child(chip(id, base.label(), active).on_click(cx.listener(
+                    row = row.child(chip(theme, id, base.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.num_from = base;
                             this.live_refresh(cx);
@@ -432,7 +426,7 @@ impl TransformWorkbench {
                 for base in Base::ALL {
                     let active = self.num_to == base;
                     let id = format!("to-{}", base.label());
-                    row = row.child(chip(id, base.label(), active).on_click(cx.listener(
+                    row = row.child(chip(theme, id, base.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.num_to = base;
                             this.live_refresh(cx);
@@ -445,7 +439,7 @@ impl TransformWorkbench {
                 for style in CaseStyle::ALL {
                     let active = self.case_style == style;
                     let id = format!("case-{}", style.label());
-                    row = row.child(chip(id, style.label(), active).on_click(cx.listener(
+                    row = row.child(chip(theme, id, style.label(), active).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.case_style = style;
                             this.live_refresh(cx);
@@ -476,10 +470,11 @@ impl TransformWorkbench {
     }
 
     fn input_header(&self, cx: &mut Context<Self>) -> Div {
-        let mut header = pane_header()
+        let theme = Theme::get(cx);
+        let mut header = pane_header(theme)
             .child(div().text_sm().flex_1().child("原文"))
             .child(
-                paste_button("transform-paste").on_mouse_down(
+                paste_button(theme, "transform-paste").on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, _: &MouseDownEvent, window, cx| {
                         cx.stop_propagation();
@@ -489,7 +484,7 @@ impl TransformWorkbench {
             );
         if self.tool_id == ids::UUID {
             header = header.child(
-                primary_button("generate", "生成")
+                primary_button(theme, "generate", "生成")
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -502,7 +497,7 @@ impl TransformWorkbench {
                     })),
             );
         }
-        header.child(button("clear", "清空").on_click(
+        header.child(button(theme, "clear", "清空").on_click(
             cx.listener(|this, _, window, cx| this.clear(window, cx)),
         ))
     }
@@ -592,7 +587,7 @@ fn run_transform(
 
 impl Render for TransformWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let (title, subtitle) = self.title();
         let entity = cx.entity().downgrade();
         div()
@@ -643,7 +638,7 @@ impl Render for TransformWorkbench {
                     .items_center()
                     .gap_2()
                     .child(div().text_lg().child(title))
-                    .child(status_chip("离线", StatusKind::Neutral))
+                    .child(status_chip(theme, "离线", StatusKind::Neutral))
                     .child(
                         div()
                             .text_xs()
@@ -652,7 +647,7 @@ impl Render for TransformWorkbench {
                     )
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
-                        view.child(status_chip(self.notice, StatusKind::Accent))
+                        view.child(status_chip(theme, self.notice, StatusKind::Accent))
                     }),
             )
             .child(self.options_bar(cx))
@@ -683,7 +678,7 @@ impl Render for TransformWorkbench {
                         }
                     })
                     .child(
-                        pane()
+                        pane(theme)
                             .w(relative(self.split))
                             .flex_shrink_0()
                             .child(self.input_header(cx))
@@ -716,13 +711,13 @@ impl Render for TransformWorkbench {
                             .child(div().w(px(2.)).h(px(36.)).rounded_sm().bg(theme.border)),
                     )
                     .child(
-                        pane()
+                        pane(theme)
                             .flex_1()
                             .child(
-                                pane_header()
+                                pane_header(theme)
                                     .child(div().text_sm().flex_1().child("结果"))
                                     .child(
-                                        button("copy-result", "复制结果")
+                                        button(theme, "copy-result", "复制结果")
                                             .opacity(if self.output_text.is_some() {
                                                 1.
                                             } else {

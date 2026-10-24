@@ -1,5 +1,6 @@
 use crate::{
     actions::*,
+    icons,
     inspector_workbench::InspectorWorkbench,
     network_workbench::NetworkWorkbench,
     json_workbench::JsonWorkbench,
@@ -9,14 +10,13 @@ use crate::{
     transform_workbench::TransformWorkbench,
     ui::{chip, status_chip, StatusKind},
 };
-use devtools_core::{Category, Detection, Registry, ToolMeta};
+use devtools_core::{Detection, Registry, ToolMeta};
 use gpui::{prelude::FluentBuilder, *};
 use std::collections::BTreeSet;
 
 pub struct Workspace {
     focus: FocusHandle,
     registry: Registry,
-    collapsed_categories: BTreeSet<Category>,
     sidebar_collapsed: bool,
     selected: &'static str,
     workbench: Entity<JsonWorkbench>,
@@ -36,7 +36,13 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Theme::sync(window, cx);
+        cx.observe_window_appearance(window, |_this, window, cx| {
+            Theme::sync(window, cx);
+            cx.notify();
+        })
+        .detach();
         let search = cx.new(|cx| TextField::new(false, false, "搜索工具", cx));
         let palette_search = cx.new(|cx| TextField::new(false, false, "搜索全部工具…", cx));
         cx.subscribe(&search, |_, _, _: &Edited, cx| cx.notify())
@@ -49,7 +55,6 @@ impl Workspace {
         Self {
             focus: cx.focus_handle(),
             registry: Registry::new(devtools_tools::catalog()),
-            collapsed_categories: BTreeSet::new(),
             sidebar_collapsed: false,
             selected: devtools_core::ids::JSON,
             workbench: cx.new(JsonWorkbench::new),
@@ -261,7 +266,7 @@ impl Workspace {
     }
 
     fn sidebar_toggle(&self, compact: bool, cx: &mut Context<Self>) -> Stateful<Div> {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         div()
             .id("toggle-sidebar")
             .cursor_pointer()
@@ -285,7 +290,7 @@ impl Workspace {
         indent: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let id = tool.id;
         let favored = self.prefs.is_favorite(id);
         div()
@@ -312,8 +317,16 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().text_xs().text_color(theme.accent).child("{ }"))
-                    .child(div().text_sm().flex_1().child(tool.name))
+                    .child(
+                        div()
+                            .w(px(22.))
+                            .flex_shrink_0()
+                            .font(crate::theme::monospace())
+                            .text_xs()
+                            .text_color(icons::category_tint(tool.category, &theme))
+                            .child(icons::tool_glyph(id)),
+                    )
+                    .child(div().text_sm().flex_1().text_color(theme.text).child(tool.name))
                     .child(
                         div()
                             .id(SharedString::from(format!("fav-{id}")))
@@ -336,7 +349,7 @@ impl Workspace {
     }
 
     fn compact_sidebar(&self, cx: &mut Context<Self>) -> Div {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let tools: Vec<_> = self
             .registry
             .tools()
@@ -360,8 +373,14 @@ impl Workspace {
                         theme.sidebar
                     })
                     .hover(move |s| s.bg(theme.selected))
-                    .child(div().text_color(theme.accent).child("{ }"))
-                    .child(div().text_xs().child(tool.name))
+                    .child(
+                        div()
+                            .font(crate::theme::monospace())
+                            .text_sm()
+                            .text_color(icons::category_tint(tool.category, &theme))
+                            .child(icons::tool_glyph(id)),
+                    )
+                    .child(div().text_xs().text_color(theme.text).child(tool.name))
                     .on_click(
                         cx.listener(move |this, _, window, cx| this.select_tool(id, window, cx)),
                     )
@@ -427,7 +446,7 @@ impl Workspace {
         if self.sidebar_collapsed {
             return self.compact_sidebar(cx).into_any_element();
         }
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let query = self.search.read(cx).buffer.text().to_owned();
         let tools = self.registry.search(&query, None);
         let mut folders = Vec::new();
@@ -458,9 +477,8 @@ impl Workspace {
                             .px_2()
                             .py_1()
                             .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.warning)
-                            .child("★  收藏"),
+                            .text_color(theme.faint)
+                            .child("收藏"),
                     )
                     .children(rows),
             );
@@ -474,8 +492,6 @@ impl Workspace {
             if matches.is_empty() {
                 continue;
             }
-            let expanded =
-                !query.trim().is_empty() || !self.collapsed_categories.contains(&category);
             let rows: Vec<_> = matches
                 .into_iter()
                 .map(|tool| self.tool_row(tool, true, cx))
@@ -487,26 +503,14 @@ impl Workspace {
                     .gap_1()
                     .child(
                         div()
-                            .id(SharedString::from(format!("folder-{}", category.id())))
-                            .cursor_pointer()
                             .px_2()
-                            .py_1()
+                            .pt_2()
+                            .pb_1()
                             .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.muted)
-                            .child(format!(
-                                "{}  {}",
-                                if expanded { "▾" } else { "▸" },
-                                category.label()
-                            ))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if !this.collapsed_categories.remove(&category) {
-                                    this.collapsed_categories.insert(category);
-                                }
-                                cx.notify();
-                            })),
+                            .text_color(theme.faint)
+                            .child(category.label()),
                     )
-                    .when(expanded, |view| view.children(rows)),
+                    .children(rows),
             );
         }
         div()
@@ -587,7 +591,7 @@ impl Workspace {
         if self.suggestions.is_empty() && self.chrome_notice.is_empty() {
             return None;
         }
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let mut suggestions_row = div().flex().flex_wrap().items_center().gap_1();
         for detection in &self.suggestions {
             let id = detection.tool_id;
@@ -602,8 +606,7 @@ impl Workspace {
             };
             let chip_label = format!("打开 {label} · {conf}");
             suggestions_row = suggestions_row.child(
-                chip(
-                    SharedString::from(format!("suggest-{id}")),
+                chip(theme, SharedString::from(format!("suggest-{id}")),
                     SharedString::from(chip_label),
                     id == self.selected,
                 )
@@ -633,7 +636,7 @@ impl Workspace {
                         .child("建议"),
                 )
                 .child(suggestions_row)
-                .child(status_chip("点击只切换工具", StatusKind::Neutral));
+                .child(status_chip(theme, "点击只切换工具", StatusKind::Neutral));
         }
         if !self.chrome_notice.is_empty() {
             row = row.child(
@@ -647,7 +650,7 @@ impl Workspace {
     }
 
     fn palette(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let tools = self.palette_tools(cx);
         let query_empty = self.palette_search.read(cx).buffer.text().trim().is_empty();
         let recent_count = if query_empty {
@@ -676,12 +679,28 @@ impl Workspace {
                     } else {
                         theme.panel
                     })
-                    .child(format!(
-                        "{}{}  ·  {}",
-                        if is_recent { "最近 · " } else { "" },
-                        tool.name,
-                        tool.category.label()
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .w(px(22.))
+                                    .font(crate::theme::monospace())
+                                    .text_xs()
+                                    .text_color(icons::category_tint(tool.category, &theme))
+                                    .child(icons::tool_glyph(id)),
+                            )
+                            .child(
+                                div().flex_1().child(format!(
+                                    "{}{}  ·  {}",
+                                    if is_recent { "最近 · " } else { "" },
+                                    tool.name,
+                                    tool.category.label()
+                                )),
+                            ),
+                    )
                     .on_click(
                         cx.listener(move |this, _, window, cx| this.select_tool(id, window, cx)),
                     )
@@ -763,7 +782,7 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         div()
             .id("workspace-root")
             .relative()

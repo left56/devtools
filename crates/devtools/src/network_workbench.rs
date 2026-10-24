@@ -172,7 +172,7 @@ impl NetworkWorkbench {
     }
 
     fn method_bar(&self, cx: &mut Context<Self>) -> Div {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let methods = [
             Method::Get,
             Method::Post,
@@ -190,7 +190,7 @@ impl NetworkWorkbench {
         for method in methods {
             let active = self.method == method;
             row = row.child(
-                chip(method.as_str(), method.as_str(), active).on_click(cx.listener(
+                chip(theme, method.as_str(), method.as_str(), active).on_click(cx.listener(
                     move |this, _, _, cx| {
                         this.method = method;
                         cx.notify();
@@ -201,8 +201,8 @@ impl NetworkWorkbench {
         row
     }
 
-    fn result_view(&self, _cx: &mut Context<Self>) -> AnyElement {
-        let theme = Theme::dark();
+    fn result_view(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = Theme::get(cx);
         match &self.state {
             NetworkState::Idle => div()
                 .flex_1()
@@ -219,8 +219,7 @@ impl NetworkWorkbench {
                     .iter()
                     .enumerate()
                     .map(|(i, (k, v))| {
-                        kv_row(
-                            format!("hdr-{i}"),
+                        kv_row(theme, format!("hdr-{i}"),
                             k.clone(),
                             v.clone(),
                             false,
@@ -242,8 +241,7 @@ impl NetworkWorkbench {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(status_chip(
-                                format!("{} {}", response.status, response.status_text),
+                            .child(status_chip(theme, format!("{} {}", response.status, response.status_text),
                                 if (200..300).contains(&response.status) {
                                     StatusKind::Success
                                 } else if response.status >= 400 {
@@ -296,7 +294,7 @@ impl NetworkWorkbench {
                     .enumerate()
                     .map(|(i, ip)| {
                         let kind = if ip.is_ipv4() { "A" } else { "AAAA" };
-                        kv_row(format!("ip-{i}"), kind, ip.to_string(), false)
+                        kv_row(theme, format!("ip-{i}"), kind, ip.to_string(), false)
                     })
                     .collect();
                 div()
@@ -314,15 +312,14 @@ impl NetworkWorkbench {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(status_chip(result.kind.label(), StatusKind::Accent))
+                            .child(status_chip(theme, result.kind.label(), StatusKind::Accent))
                             .child(
                                 div()
                                     .font(crate::theme::monospace())
                                     .text_sm()
                                     .child(result.name.clone()),
                             )
-                            .child(status_chip(
-                                format!("{} 条", result.addresses.len()),
+                            .child(status_chip(theme, format!("{} 条", result.addresses.len()),
                                 StatusKind::Neutral,
                             )),
                     )
@@ -343,7 +340,7 @@ fn primary_placeholder(tool_id: &str) -> &'static str {
 
 impl Render for NetworkWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let (title, subtitle) = self.title();
         let is_http = self.tool_id == ids::HTTP_REQUEST;
 
@@ -363,14 +360,13 @@ impl Render for NetworkWorkbench {
                     .items_center()
                     .gap_2()
                     .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
-                    .child(status_chip(subtitle, StatusKind::Warning))
+                    .child(status_chip(theme, subtitle, StatusKind::Warning))
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
-                        view.child(status_chip(self.notice, StatusKind::Success))
+                        view.child(status_chip(theme, self.notice, StatusKind::Success))
                     }),
             )
-            .child(banner(
-                StatusKind::Warning,
+            .child(banner(theme, StatusKind::Warning,
                 "会访问网络 · 打开本工具不会发请求；只有点击「运行」才会联网。响应与 URL 不会写入收藏/最近使用。",
             ))
             .when(is_http, |view| view.child(self.method_bar(cx)))
@@ -380,18 +376,18 @@ impl Render for NetworkWorkbench {
                     .items_center()
                     .gap_2()
                     .child(
-                        primary_button("network-run", "运行").on_click(cx.listener(
+                        primary_button(theme, "network-run", "运行").on_click(cx.listener(
                             |this, _, window, cx| this.run(window, cx),
                         )),
                     )
                     .child(
-                        button("network-clear", "清空").on_click(cx.listener(
+                        button(theme, "network-clear", "清空").on_click(cx.listener(
                             |this, _, window, cx| this.clear(window, cx),
                         )),
                     ),
             )
             .when_some(self.error.clone(), |view, message| {
-                view.child(banner(StatusKind::Error, message))
+                view.child(banner(theme, StatusKind::Error, message))
             })
             .child(
                 div()
@@ -401,11 +397,11 @@ impl Render for NetworkWorkbench {
                     .flex_col()
                     .gap_2()
                     .child(
-                        pane()
+                        pane(theme)
                             .h(if is_http { px(120.) } else { px(80.) })
                             .flex_shrink_0()
                             .child(
-                                pane_header()
+                                pane_header(theme)
                                     .child(
                                         div()
                                             .text_xs()
@@ -414,7 +410,7 @@ impl Render for NetworkWorkbench {
                                     )
                                     .child(div().flex_1())
                                     .child(
-                                        paste_button("network-paste").on_mouse_down(
+                                        paste_button(theme, "network-paste").on_mouse_down(
                                             MouseButton::Left,
                                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
                                                 cx.stop_propagation();
@@ -439,10 +435,10 @@ impl Render for NetworkWorkbench {
                                 .flex()
                                 .gap_2()
                                 .child(
-                                    pane()
+                                    pane(theme)
                                         .flex_1()
                                         .child(
-                                            pane_header().child(
+                                            pane_header(theme).child(
                                                 div()
                                                     .text_xs()
                                                     .text_color(theme.muted)
@@ -458,10 +454,10 @@ impl Render for NetworkWorkbench {
                                         ),
                                 )
                                 .child(
-                                    pane()
+                                    pane(theme)
                                         .flex_1()
                                         .child(
-                                            pane_header().child(
+                                            pane_header(theme).child(
                                                 div()
                                                     .text_xs()
                                                     .text_color(theme.muted)
@@ -475,10 +471,10 @@ impl Render for NetworkWorkbench {
                         )
                     })
                     .child(
-                        pane()
+                        pane(theme)
                             .flex_1()
                             .child(
-                                pane_header()
+                                pane_header(theme)
                                     .child(
                                         div()
                                             .text_xs()
@@ -486,7 +482,7 @@ impl Render for NetworkWorkbench {
                                             .child("结果"),
                                     )
                                     .child(div().flex_1())
-                                    .child(status_chip("显式联网", StatusKind::Warning)),
+                                    .child(status_chip(theme, "显式联网", StatusKind::Warning)),
                             )
                             .child(self.result_view(cx)),
                     ),

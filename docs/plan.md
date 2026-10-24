@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0–M5 第一批已落盘；**UX：轻量工具实时运行、顶栏剪贴板条移除、输入框「粘贴」**。M6 分发仍是计划。验证见 [m1-validation.md](m1-validation.md)、[json-inspector-validation.md](json-inspector-validation.md)、[linux-x11-verification.md](linux-x11-verification.md)，以及 `/workspace/devtools-linux-verify-ux2/`（本轮 UX）。
+状态：M0–M5 第一批已落盘；**UI：每工具独立图标、分类常开且淡化、明暗主题跟随系统外观**。M6 分发仍是计划。验证见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-theme/`。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -79,12 +79,12 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - `case`：snake / camel / Pascal / kebab / CONSTANT。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
-- **UI 视觉打磨**：主题分层、主/次按钮、检查器布局（JWT 堆叠卡、Diff 上下结构、URL KV 行）；Linux Xvfb 截图见 [linux-x11-verification.md](linux-x11-verification.md) 与 `/workspace/devtools-linux-verify-ui/`。
+- **UI 视觉打磨**：明/暗双色板（`Theme::light` / `Theme::dark`），经 `WindowAppearance` + `observe_window_appearance` 跟随系统；`DEVTOOLS_FORCE_THEME=light|dark` 仅用于截图验收。侧栏每工具独立字形图标（`icons.rs`），分类标签用 `faint`、不可折叠。Linux Xvfb 无 portal 时默认偏 Light；截图见 `/workspace/devtools-linux-verify-theme/`。
 - **通用变换工作台**（`TransformWorkbench`）：左右分栏；**轻量变换实时运行**（编码/解码用方向芯片；UUID「生成」仍为按钮）。切换变换类工具时保留输入并按新工具重算。不自动切工具。
 - **M4 效率（UX 已收紧）**：无顶栏剪贴板条。输入框标题右侧「粘贴」= 读一次剪贴板并写入该输入；`Ctrl+Shift+V` / macOS `Cmd+Shift+V` 同效（兼更新建议芯片）。建议为标题下紧凑芯片行（点击只切换工具）。收藏：侧边栏 ★ + `Ctrl+Shift+F`。最近使用写入 `prefs.json`；命令面板空查询置顶最近。
 - **本地数据目录**：Linux `$XDG_DATA_HOME/devtools` 或 `~/.local/share/devtools`；macOS `~/Library/Application Support/Devtools`。文件 `prefs.json`。
 - **M5 联网（第一批）**：`http-request`、`dns-lookup`，`NetworkUse::Explicit`。打开不发请求；运行前横幅「会访问网络」。响应/URL 不进 prefs。`NetworkWorkbench`。
-- macOS 透明原生标题栏融合暗色内容；侧边栏分类文件夹；`cmd-b` 收起；`cmd-k` 命令面板。
+- macOS 透明原生标题栏融合内容区；侧边栏分类常开（不折叠）；`cmd-b` 收起整条侧栏；`cmd-k` 命令面板。
 - `suggest` 纯函数：JSON / JWT 结构 / 时间戳 / 标准 Base64。猜中也不自动切换；未注册工具不会出现在 `applicable_suggestions` 里。
 - `cmd-w` 和最后一个窗口关闭时退出。
 
@@ -123,6 +123,8 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 2026-10-23：UI 视觉打磨落盘（主题分层、主/次按钮、JWT 堆叠卡、Diff 上下结构、URL KV）；Xvfb 截图 `/workspace/devtools-linux-verify-ui/`。
 
 2026-10-23：M3 检查器（jwt / regex / cron / url-parse / diff）在 Linux x86_64 落盘并接 `InspectorWorkbench`。`devtools-tools` 单测扩到含 alg:none 与过期 exp；全工作区 `cargo test --workspace`（66 tools 层）与 clippy `-D warnings` 通过；Xvfb + lavapipe 交互截图见 `/workspace/devtools-linux-verify-m3/`。
+
+2026-10-24：侧栏独立图标 + 分类常开淡化 + 明暗主题跟随系统（`observe_window_appearance`）；Xvfb 截图 `/workspace/devtools-linux-verify-theme/`。
 
 2026-10-23：M4 效率 + M5 第一批联网落盘。prefs 只存 id/时间戳/收藏；tools 层 74 个单测；`cargo test --workspace` + clippy `-D warnings` 通过；Xvfb 截图见 `/workspace/devtools-linux-verify-m4/` 与 `/workspace/devtools-linux-verify-m5/`。
 
@@ -246,7 +248,7 @@ id 一旦发布给注册表就不要改。显示名可以改。
 - 结果区一键复制。复制的是结果，不是再解析一次。
 - 搜索框接到 `Registry::search`。中文「格式化」和英文 `json` 都能找到 JSON。
 - `cmd-k` 打开同一个搜索。选中后切工具。
-- 暗色主题继续用。不做亮色。
+- 明暗主题跟随系统夜间模式（`WindowAppearance`）。Linux 无 xdg-desktop-portal 时 GPUI 常保持 Light。
 
 验收：
 

@@ -208,7 +208,7 @@ impl JsonWorkbench {
         }
     }
     fn tree_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let Some(doc) = &self.run.document else {
             return div()
                 .flex_1()
@@ -322,15 +322,15 @@ impl JsonWorkbench {
                     .border_b_1()
                     .border_color(theme.border)
                     .child(
-                        button("expand-all", "展开").on_click(cx.listener(|this, _, _, cx| {
+                        button(theme, "expand-all", "展开").on_click(cx.listener(|this, _, _, cx| {
                             this.update_tree(|tree, _| tree.expand_all(), cx)
                         })),
                     )
-                    .child(button("collapse-all", "收起").on_click(cx.listener(
+                    .child(button(theme, "collapse-all", "收起").on_click(cx.listener(
                         |this, _, _, cx| this.update_tree(|tree, doc| tree.collapse_all(doc), cx),
                     )))
                     .when(self.tree.scope != 0, |view| {
-                        view.child(button("tree-root", "返回根").on_click(cx.listener(
+                        view.child(button(theme, "tree-root", "返回根").on_click(cx.listener(
                             |this, _, _, cx| this.update_tree(|tree, _| tree.root(), cx),
                         )))
                     })
@@ -401,14 +401,14 @@ impl JsonWorkbench {
                             )
                             .child(div().flex_1())
                             .when(selected.kind.is_container(), |view| {
-                                view.child(button("focus-node", "聚焦节点").on_click(cx.listener(
+                                view.child(button(theme, "focus-node", "聚焦节点").on_click(cx.listener(
                                     |this, _, _, cx| {
                                         this.update_tree(|tree, doc| tree.focus_selected(doc), cx)
                                     },
                                 )))
                             })
                             .child(
-                                button("copy-value", "复制值")
+                                button(theme, "copy-value", "复制值")
                                     .on_click(cx.listener(|this, _, _, cx| this.copy_value(cx))),
                             ),
                     )
@@ -431,7 +431,7 @@ impl JsonWorkbench {
         is_jq: bool,
         cx: &mut Context<Self>,
     ) -> Div {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         div()
             .flex()
             .items_center()
@@ -457,7 +457,7 @@ impl JsonWorkbench {
                     .child(field),
             )
             .child(
-                button(id, "复制").on_click(cx.listener(move |this, _, _, cx| {
+                button(theme, id, "复制").on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(node) = this
                         .run
                         .document
@@ -484,7 +484,7 @@ impl JsonWorkbench {
 
 impl Render for JsonWorkbench {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let entity = cx.entity().downgrade();
         div()
             .id("json-workbench")
@@ -539,7 +539,7 @@ impl Render for JsonWorkbench {
                     )
                     .child(div().flex_1())
                     .when(!self.notice.is_empty(), |view| {
-                        view.child(status_chip(self.notice, StatusKind::Accent))
+                        view.child(status_chip(theme, self.notice, StatusKind::Accent))
                     }),
             )
             .when_some(self.run.error.as_ref(), |view, error| {
@@ -574,14 +574,14 @@ impl Render for JsonWorkbench {
                         }
                     })
                     .child(
-                        pane()
+                        pane(theme)
                             .w(relative(self.split))
                             .flex_shrink_0()
                             .child(
-                                pane_header()
+                                pane_header(theme)
                                     .child(div().text_sm().flex_1().child("原文"))
                                     .child(
-                                        paste_button("json-paste").on_mouse_down(
+                                        paste_button(theme, "json-paste").on_mouse_down(
                                             MouseButton::Left,
                                             cx.listener(|this, _: &MouseDownEvent, window, cx| {
                                                 cx.stop_propagation();
@@ -589,17 +589,17 @@ impl Render for JsonWorkbench {
                                             }),
                                         ),
                                     )
-                                    .child(button("minify", "压缩").on_click(cx.listener(
+                                    .child(button(theme, "minify", "压缩").on_click(cx.listener(
                                         |this, _, window, cx| {
                                             this.execute(JsonAction::Minify, window, cx)
                                         },
                                     )))
-                                    .child(button("prettify", "格式化").on_click(cx.listener(
+                                    .child(button(theme, "prettify", "格式化").on_click(cx.listener(
                                         |this, _, window, cx| {
                                             this.execute(JsonAction::Prettify, window, cx)
                                         },
                                     )))
-                                    .child(button("clear", "清空").on_click(
+                                    .child(button(theme, "clear", "清空").on_click(
                                         cx.listener(|this, _, window, cx| this.clear(window, cx)),
                                     )),
                             )
@@ -632,13 +632,13 @@ impl Render for JsonWorkbench {
                             .child(div().w(px(2.)).h(px(36.)).rounded_sm().bg(theme.border)),
                     )
                     .child(
-                        pane()
+                        pane(theme)
                             .flex_1()
                             .child(
-                                pane_header()
+                                pane_header(theme)
                                     .child(div().text_sm().flex_1().child("结果"))
                                     .child(
-                                        button("tree-tab", "JSON 树")
+                                        button(theme, "tree-tab", "JSON 树")
                                             .bg(if !self.text_view {
                                                 theme.selected
                                             } else {
@@ -655,7 +655,7 @@ impl Render for JsonWorkbench {
                                             })),
                                     )
                                     .child(
-                                        button("text-tab", "文本")
+                                        button(theme, "text-tab", "文本")
                                             .bg(if self.text_view {
                                                 theme.selected
                                             } else {
@@ -672,7 +672,7 @@ impl Render for JsonWorkbench {
                                             })),
                                     )
                                     .child(
-                                        button("copy-result", "复制结果")
+                                        button(theme, "copy-result", "复制结果")
                                             .opacity(if self.run.output.is_some() {
                                                 1.
                                             } else {

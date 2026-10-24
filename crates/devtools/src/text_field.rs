@@ -334,7 +334,7 @@ impl Element for TextLine {
             len: self.text.len(),
             font: style.font(),
             color: if self.placeholder {
-                Theme::dark().muted.into()
+                Theme::get(cx).muted.into()
             } else {
                 style.color
             },
@@ -397,6 +397,7 @@ impl Element for TextLine {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let theme = Theme::get(cx);
         self.field.update(cx, |field, _| {
             let end = self.start + if self.placeholder { 0 } else { self.text.len() };
             let selection = field.buffer.selection();
@@ -412,7 +413,7 @@ impl Element for TextLine {
                         point(bounds.left() + x, bounds.top()),
                         size(px(2.), px(LINE_HEIGHT)),
                     ),
-                    Theme::dark().accent,
+                    theme.accent,
                 ))
             } else {
                 None
@@ -439,7 +440,7 @@ impl Element for TextLine {
                             point(bounds.left() + left, bounds.top()),
                             point(bounds.left() + right, bounds.bottom()),
                         ),
-                        Theme::dark().selected,
+                        theme.selected,
                     ))
                 } else {
                     None
@@ -523,7 +524,7 @@ impl Element for TextLine {
 
 impl Render for TextField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::dark();
+        let theme = Theme::get(cx);
         let mut start = 0;
         let lines: Vec<_> = self
             .buffer
