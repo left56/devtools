@@ -23,7 +23,9 @@ use devtools_tools::{
     number_base,
     number_base::Base,
     numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, quantity, qr_tool,
-    random_port, regex_memo, roman, rsa_tool, safelink, slugify, sql_format, svg_placeholder,
+    random_port, regex_memo, roman, rsa_tool, safelink, slugify,
+    sql_format::{self, SqlMode},
+    svg_placeholder,
     temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr,
 };
 use gpui::{prelude::FluentBuilder, *};
@@ -40,6 +42,7 @@ pub struct BatchWorkbench {
     /// `None` = auto-detect for 数据格式.
     data_in: Option<FormatKind>,
     data_out: FormatKind,
+    sql_mode: SqlMode,
     result_scroll: ScrollHandle,
 }
 
@@ -68,6 +71,7 @@ impl BatchWorkbench {
             quantity: 1,
             data_in: None,
             data_out: FormatKind::default_output(),
+            sql_mode: SqlMode::default_mode(),
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -99,6 +103,7 @@ impl BatchWorkbench {
             self.quantity = 1;
             self.data_in = None;
             self.data_out = FormatKind::default_output();
+            self.sql_mode = SqlMode::default_mode();
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
                 field.set_multiline(
@@ -238,7 +243,14 @@ impl BatchWorkbench {
             cx.notify();
             return;
         }
-        match run_batch(self.tool_id, &input, self.num_from, self.data_in, self.data_out) {
+        match run_batch(
+            self.tool_id,
+            &input,
+            self.num_from,
+            self.data_in,
+            self.data_out,
+            self.sql_mode,
+        ) {
             Ok(rows) => {
                 self.rows = rows;
                 self.error = None;
@@ -273,7 +285,7 @@ impl BatchWorkbench {
             ids::EMAIL_NORM => ("邮箱规范化", "小写 · Gmail 点号 · +tag"),
             ids::LIST_CONV => ("列表转换", "排序 · 反转 · 去重 · 连接"),
             ids::DATA_FORMAT => ("数据格式", "自动识别 JSON/YAML/TOML/XML · 可选输入/输出类型"),
-                        ids::SQL_FORMAT => ("SQL 格式化", "轻量美化 / 压缩"),
+                        ids::SQL_FORMAT => ("SQL 格式化", "美化 / 压缩切换 · 默认美化"),
             ids::MARKDOWN_HTML => ("Markdown → HTML", "CommonMark"),
             ids::IPV4_SUBNET => ("IPv4 子网", "CIDR 计算"),
             ids::IPV4_ADDR => ("IPv4 地址", "点分 · 整数 · 十六进制"),
@@ -319,7 +331,19 @@ impl BatchWorkbench {
     fn options_bar(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let mut row = div().flex().flex_wrap().items_center().gap_2();
-        if self.tool_id == ids::DATA_FORMAT {
+        if self.tool_id == ids::SQL_FORMAT {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in SqlMode::ALL {
+                let active = self.sql_mode == mode;
+                let id = format!("sql-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.sql_mode = mode;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::DATA_FORMAT {
             row = row.child(div().text_xs().text_color(theme.muted).child("输入"));
             let auto_active = self.data_in.is_none();
             row = row.child(chip(theme, "data-in-auto", "自动", auto_active).on_click(
@@ -731,6 +755,7 @@ fn run_batch(
     num_from: Base,
     data_in: Option<FormatKind>,
     data_out: FormatKind,
+    sql_mode: SqlMode,
 ) -> Result<Vec<(&'static str, String)>, String> {
     match tool_id {
         ids::TIMESTAMP => timestamp::convert_all(input)
@@ -774,7 +799,7 @@ fn run_batch(
         ids::EMAIL_NORM => email_norm::convert_all(input),
         ids::LIST_CONV => list_conv::convert_all(input),
         ids::DATA_FORMAT => data_format::convert_row(input, data_in, data_out),
-        ids::SQL_FORMAT => sql_format::convert_all(input),
+        ids::SQL_FORMAT => sql_format::convert_mode(input, sql_mode),
         ids::MARKDOWN_HTML => markdown_html::convert_all(input),
         ids::IPV4_SUBNET => ipv4_tool::subnet_all(input),
         ids::IPV4_ADDR => ipv4_tool::addr_all(input),

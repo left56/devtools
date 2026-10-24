@@ -2,13 +2,34 @@
 
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqlMode {
+    Beautify,
+    Minify,
+}
+
+impl SqlMode {
+    pub const ALL: [SqlMode; 2] = [SqlMode::Beautify, SqlMode::Minify];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Beautify => "美化",
+            Self::Minify => "压缩",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Beautify
+    }
+}
+
 pub fn meta() -> ToolMeta {
     ToolMeta {
         id: ids::SQL_FORMAT,
         name: "SQL format",
         category: Category::Data,
-        summary: "轻量 SQL 美化/压缩（启发式，非整库解析器）。",
-        keywords: &["sql", "prettify", "format", "格式化"],
+        summary: "轻量 SQL 美化/压缩（启发式，非整库解析器）。模式切换，默认美化。",
+        keywords: &["sql", "prettify", "format", "格式化", "美化", "压缩"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -20,15 +41,26 @@ const BREAK_BEFORE: &[&str] = &[
     "UPDATE", "DELETE",
 ];
 
+/// One selected mode → one labeled row (BatchWorkbench).
+pub fn convert_mode(input: &str, mode: SqlMode) -> Result<Vec<(&'static str, String)>, String> {
+    let t = input.trim();
+    if t.is_empty() {
+        return Err("输入为空".into());
+    }
+    let value = match mode {
+        SqlMode::Beautify => prettify(t),
+        SqlMode::Minify => minify(t),
+    };
+    Ok(vec![(mode.label(), value)])
+}
+
+/// Kept for tests / callers that want both; UI uses [`convert_mode`].
 pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
     let t = input.trim();
     if t.is_empty() {
         return Err("输入为空".into());
     }
-    Ok(vec![
-        ("美化", prettify(t)),
-        ("压缩", minify(t)),
-    ])
+    Ok(vec![("美化", prettify(t)), ("压缩", minify(t))])
 }
 
 fn minify(sql: &str) -> String {
@@ -50,7 +82,6 @@ fn minify(sql: &str) -> String {
 
 fn prettify(sql: &str) -> String {
     let mut s = minify(sql);
-    // Insert newlines before major keywords (case-insensitive).
     for kw in BREAK_BEFORE {
         s = insert_before_keyword(&s, kw);
     }
@@ -92,6 +123,28 @@ mod tests {
     fn minify_spaces() {
         let rows = convert_all("select   a  from  t  where x = 1").unwrap();
         assert!(rows[1].1.to_ascii_lowercase().contains("select a from"));
-        assert!(rows[0].1.to_ascii_uppercase().contains("\nFROM") || rows[0].1.to_ascii_uppercase().contains("FROM"));
+        assert!(
+            rows[0].1.to_ascii_uppercase().contains("\nFROM")
+                || rows[0].1.to_ascii_uppercase().contains("FROM")
+        );
+    }
+
+    #[test]
+    fn mode_switch_one_row() {
+        let pretty = convert_mode("select * from abc", SqlMode::Beautify).unwrap();
+        assert_eq!(pretty.len(), 1);
+        assert_eq!(pretty[0].0, "美化");
+        assert!(pretty[0].1.to_ascii_uppercase().contains("FROM"));
+
+        let mini = convert_mode("select   *   from  abc", SqlMode::Minify).unwrap();
+        assert_eq!(mini.len(), 1);
+        assert_eq!(mini[0].0, "压缩");
+        assert_eq!(mini[0].1.to_ascii_lowercase(), "select * from abc");
+    }
+
+    #[test]
+    fn default_is_beautify() {
+        assert_eq!(SqlMode::default_mode(), SqlMode::Beautify);
+        assert_eq!(SqlMode::ALL[0], SqlMode::Beautify);
     }
 }
