@@ -30,6 +30,32 @@ pub mod ids {
     pub const CHMOD: &str = "chmod";
     pub const BINARY: &str = "binary";
     pub const COLOR: &str = "color";
+    pub const BASIC_AUTH: &str = "basic-auth";
+    pub const HMAC: &str = "hmac";
+    pub const TOKEN: &str = "token";
+    pub const OTP: &str = "otp";
+    pub const EMAIL_NORM: &str = "email-norm";
+    pub const LIST_CONV: &str = "list-conv";
+    pub const JSON_YAML: &str = "json-yaml";
+    pub const JSON_TOML: &str = "json-toml";
+    pub const SQL_FORMAT: &str = "sql-format";
+    pub const MARKDOWN_HTML: &str = "markdown-html";
+    pub const IPV4_SUBNET: &str = "ipv4-subnet";
+    pub const IPV4_ADDR: &str = "ipv4-addr";
+    pub const IPV4_RANGE: &str = "ipv4-range";
+    pub const IPV6_ULA: &str = "ipv6-ula";
+    pub const MAC_GEN: &str = "mac-gen";
+    pub const MIME: &str = "mime";
+    pub const HTTP_STATUS: &str = "http-status";
+    pub const UA_PARSE: &str = "ua-parse";
+    pub const IBAN: &str = "iban";
+    pub const TEMPERATURE: &str = "temperature";
+    pub const ETA: &str = "eta";
+    pub const NUMERONYM: &str = "numeronym";
+    pub const OBFUSCATE: &str = "obfuscate";
+    pub const NATO: &str = "nato";
+    pub const SAFELINK: &str = "safelink";
+    pub const DOCKER_RUN: &str = "docker-run";
 }
 
 /// Whether running the tool contacts the network.

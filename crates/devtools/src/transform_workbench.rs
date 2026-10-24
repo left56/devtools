@@ -15,7 +15,8 @@ use devtools_tools::{
     base64::{self, Alphabet},
     case::{self, CaseStyle},
     hash::{self, Algorithm},
-    html_escape, lorem, slugify, ulid_tool, url_encode,
+    html_escape, lorem, slugify, token_gen, ulid_tool, url_encode,
+    token_gen::Alphabet as TokenAlphabet,
     uuid_tool::{self, Version as UuidVersion},
 };
 use gpui::{prelude::FluentBuilder, *};
@@ -39,6 +40,8 @@ pub struct TransformWorkbench {
     hash_algo: Algorithm,
     uuid_version: UuidVersion,
     lorem_paragraphs: usize,
+    token_length: usize,
+    token_alphabet: TokenAlphabet,
     case_style: CaseStyle,
     output_text: Option<String>,
     error: Option<String>,
@@ -67,6 +70,8 @@ impl TransformWorkbench {
             hash_algo: Algorithm::Sha256,
             uuid_version: UuidVersion::V4,
             lorem_paragraphs: 1,
+            token_length: 32,
+            token_alphabet: TokenAlphabet::Hex,
             case_style: CaseStyle::Snake,
             output_text: None,
             error: None,
@@ -134,7 +139,7 @@ impl TransformWorkbench {
 
     /// Recompute result from current input (no network). Skips UUID generate.
     fn live_refresh(&mut self, cx: &mut Context<Self>) {
-        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM) {
+        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN) {
             cx.notify();
             return;
         }
@@ -176,7 +181,7 @@ impl TransformWorkbench {
             ids::BASE64 | ids::URL_ENCODE | ids::HTML_ESCAPE => self.live_mode,
             ids::HASH => TransformAction::Hash,
             ids::CASE | ids::SLUGIFY => TransformAction::Convert,
-            ids::UUID | ids::ULID | ids::LOREM => TransformAction::Generate,
+            ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN => TransformAction::Generate,
             _ => TransformAction::Encode,
         }
     }
@@ -233,6 +238,7 @@ impl TransformWorkbench {
             ids::HASH => ("Hash", "离线 · MD5/SHA-1 不用于密码或完整性安全"),
             ids::UUID => ("UUID", "离线 · v4 随机 · 可选 v7"),
             ids::ULID => ("ULID", "离线 · 时间有序 · 点击生成"),
+            ids::TOKEN => ("Token", "离线 · 随机令牌 · 点击生成"),
             ids::LOREM => ("Lorem ipsum", "离线 · 占位段落 · 点击生成"),
             ids::SLUGIFY => ("Slugify", "离线 · 小写 · 非字母数字变连字符"),
             ids::CASE => ("Case", "离线 · snake / camel / kebab / CONSTANT"),
@@ -318,6 +324,7 @@ impl TransformWorkbench {
                         Algorithm::Md5 => "hash-md5",
                         Algorithm::Sha1 => "hash-sha1",
                         Algorithm::Sha256 => "hash-sha256",
+                        Algorithm::Sha384 => "hash-sha384",
                         Algorithm::Sha512 => "hash-sha512",
                     };
                     let label = if let Some(note) = algo.safety_note() {
@@ -362,6 +369,30 @@ impl TransformWorkbench {
                     )));
                 }
             }
+            ids::TOKEN => {
+                row = row.child(div().text_xs().text_color(theme.muted).child("长度"));
+                for n in [16usize, 24, 32, 64] {
+                    let active = self.token_length == n;
+                    let id = format!("token-len-{n}");
+                    row = row.child(chip(theme, id, n.to_string(), active).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            this.token_length = n;
+                            cx.notify();
+                        },
+                    )));
+                }
+                row = row.child(div().text_xs().text_color(theme.muted).child("字母表"));
+                for alphabet in TokenAlphabet::ALL {
+                    let active = self.token_alphabet == alphabet;
+                    let id = format!("token-alpha-{}", alphabet.label());
+                    row = row.child(chip(theme, id, alphabet.label(), active).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            this.token_alphabet = alphabet;
+                            cx.notify();
+                        },
+                    )));
+                }
+            }
             ids::ULID | ids::SLUGIFY => {}
             ids::CASE => {
                 row = row.child(div().text_xs().text_color(theme.muted).child("风格"));
@@ -382,7 +413,7 @@ impl TransformWorkbench {
             div()
                 .text_xs()
                 .text_color(theme.muted)
-                .child(if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM) {
+                .child(if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN) {
                     "点击生成"
                 } else {
                     "输入即更新"
@@ -391,7 +422,7 @@ impl TransformWorkbench {
     }
 
     fn run_primary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM) {
+        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN) {
             self.execute(TransformAction::Generate, window, cx);
             return;
         }
@@ -411,7 +442,7 @@ impl TransformWorkbench {
                     }),
                 ),
             );
-        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM) {
+        if matches!(self.tool_id, ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN) {
             header = header.child(
                 primary_button(theme, "generate", "生成")
                     .on_mouse_down(
@@ -440,6 +471,7 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::HASH => "粘贴要计算摘要的文本 · 输入即更新",
         ids::UUID => "点击「生成」；输入不参与生成",
         ids::ULID => "点击「生成」；输入不参与生成",
+        ids::TOKEN => "可选在输入里写长度数字；主要用上方选项",
         ids::LOREM => "可选：在上方选段落数，再点生成",
         ids::SLUGIFY => "粘贴标题，例如 Hello World · 输入即更新",
         ids::CASE => "粘贴标识符，例如 hello_world · 输入即更新",
@@ -451,7 +483,7 @@ fn default_live_mode(tool_id: &str) -> TransformAction {
     match tool_id {
         ids::HASH => TransformAction::Hash,
         ids::CASE | ids::SLUGIFY => TransformAction::Convert,
-        ids::UUID | ids::ULID | ids::LOREM => TransformAction::Generate,
+        ids::UUID | ids::ULID | ids::LOREM | ids::TOKEN => TransformAction::Generate,
         _ => TransformAction::Encode,
     }
 }
@@ -489,6 +521,10 @@ fn run_transform(
         (ids::HASH, TransformAction::Hash) => Ok(hash::digest(input, state.hash_algo)),
         (ids::UUID, TransformAction::Generate) => Ok(uuid_tool::generate(state.uuid_version)),
         (ids::ULID, TransformAction::Generate) => Ok(ulid_tool::generate()),
+        (ids::TOKEN, TransformAction::Generate) => {
+            let len = token_gen::parse_length(input, state.token_length);
+            Ok(token_gen::generate(len, state.token_alphabet))
+        },
         (ids::LOREM, TransformAction::Generate) => Ok(lorem::generate(state.lorem_paragraphs)),
         (ids::CASE, TransformAction::Convert) => Ok(case::convert(input, state.case_style)),
         (ids::SLUGIFY, TransformAction::Convert) => Ok(slugify::slugify(input)),

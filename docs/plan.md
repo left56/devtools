@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：M0–M5 第一批已落盘；**UI：工具栏按钮等高；Date-time 批量格式（it-tools 风格）；第一批 it-tools 补齐**。M6 分发仍是计划。验证见 [linux-x11-verification.md](linux-x11-verification.md)。
+状态：M0–M5 已落盘；**it-tools 复刻第二批已合入（目录约 51 个工具）**；工具栏按钮等高；Date-time / BatchWorkbench。M6 分发仍是计划。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -90,6 +90,7 @@ M0–M5（第一批联网）已实现。**当前验收主机是 Linux x86_64 + X
   - `timestamp`（显示名 Date-time）：自动识别 Unix 秒/毫秒、ISO、常见日期；默认填入当前本机时间；批量输出本机/ISO/RFC/Unix/Mongo/Excel 等（`BatchWorkbench`）。
   - `number-base`：同时显示 2/8/10/16；可识别 `0x`/`0b`/`0o`（`BatchWorkbench`）。
   - 新增（it-tools 第一批）：`ulid`、`slugify`、`lorem`、`text-stats`、`roman`、`percentage`、`chmod`、`binary`、`color`。
+  - 新增（it-tools 第二批）：`basic-auth`、`hmac`、`token`、`otp`、`email-norm`、`list-conv`、`json-yaml`、`json-toml`、`sql-format`、`markdown-html`、IPv4×3、`ipv6-ula`、`mac-gen`、`mime`、`http-status`、`ua-parse`、`iban`、`temperature`、`eta`、`numeronym`、`obfuscate`、`nato`、`safelink`、`docker-run`；Hash 增 SHA-384。
   - `case`：snake / camel / Pascal / kebab / CONSTANT。
 - 通用自研文本框：多行编辑器、单行搜索、只读结果。选择、复制/剪切/粘贴、滚动、Menlo 与中文字体回退、128 步线性撤销，无 redo。
 - JSON 工作台：格式化、压缩、清空、复制结果；原文/结果左右分栏；JSON 树/文本切换与路径。
@@ -345,15 +346,16 @@ JWT、正则、cron、URL 拆分、diff。结果走 `InspectorWorkbench`（不�
 
 ## it-tools 覆盖
 
-对照 [it-tools](https://it-tools.tech/) / `CorentinTh/it-tools`：
+对照 [it-tools](https://it-tools.tech/) / `CorentinTh/it-tools`（约 86 个）：
 
 | 状态 | 工具 |
 | --- | --- |
-| 已有 | JSON、Base64、URL encode、HTML entities、Hash、UUID、Date-time、Number base、Case、JWT、Regex、Diff、URL parse、Cron、HTTP、DNS、ULID、Slugify、Lorem、Text stats、Roman、Percentage、Chmod、Text binary、Color |
-| 进行中 / 下一批 | SVG placeholder、Token generator、Hash text variants、BIP39、OTP、IPv4 converters、MAC address、QR text（纯生成）、YAML/XML、SQL minify、Phone parse、ETA 等纯离线小工具 |
-| 暂缓 | Camera、PDF 签名、Wifi QR、Emoji picker、Device info、RSA/加密/bcrypt、MAC 厂商查询 API、Benchmark builder |
+| 已有（≈51） | JSON、Base64、URL encode、HTML entities、Hash（含 SHA-384）、HMAC、UUID、ULID、Token、OTP/TOTP、Date-time、Number base、Case、Slugify、Lorem、Text stats、List converter、Email normalizer、Numeronym、Obfuscator、NATO、Markdown→HTML、Roman、Percentage、Chmod、Text binary、Color、Temperature、ETA、Basic Auth、JSON↔YAML、JSON↔TOML、SQL format、IPv4 subnet/addr/range、IPv6 ULA、MAC gen、MIME、HTTP status、UA parse、Safelink、IBAN、Docker run→Compose、JWT、Regex、Diff、URL parse、Cron、HTTP、DNS |
+| 下一批候选 | XML↔JSON、JSON↔CSV、YAML↔TOML、Phone parser、Password strength、Keycode info、JSON diff、ASCII text drawer、Chronometer（需 UI 计时器）、Crontab generator UI 增强、QR text（纯生成、无渲染依赖时） |
+| 暂缓及原因 | Camera / Device info（需硬件与浏览器 API）；PDF 签名 / Wi‑Fi QR / Emoji picker（重 UI 或资源）；RSA / Encryption / bcrypt / BIP39（密码学 UX 与密钥管理需单独设计）；MAC vendor lookup / Benchmark（联网或长时间任务）；html-wysiwyg（富文本编辑器） |
 
-设计原则（本轮起）：优先「一输入、多结果、每行可复制」；随机生成类保持显式按钮；打开日期时间时默认当前时间。
+设计原则：优先「一输入、多结果、每行可复制」；随机生成类显式按钮；日期时间默认当前时间。Linux-first，纯 Rust，Offline 除非 `NetworkUse::Explicit`。
+
 
 ## 新增一个工具
 

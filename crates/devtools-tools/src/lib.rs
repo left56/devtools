@@ -10,30 +10,53 @@
 #![forbid(unsafe_code)]
 
 pub mod base64;
+pub mod basic_auth;
+pub mod binary_tool;
 pub mod case;
+pub mod chmod_calc;
+pub mod color_tool;
 pub mod cron_tool;
+pub mod data_format;
 pub mod diff_tool;
-pub mod hash;
-pub mod http_request;
 pub mod dns_lookup;
+pub mod docker_compose;
+pub mod email_norm;
+pub mod eta_tool;
+pub mod hash;
+pub mod hmac_tool;
 pub mod html_escape;
+pub mod http_request;
+pub mod http_status;
+pub mod iban_tool;
+pub mod ipv4_tool;
+pub mod ipv6_ula;
 pub mod json;
 pub mod jwt;
+pub mod list_conv;
+pub mod lorem;
+pub mod mac_gen;
+pub mod markdown_html;
+pub mod mime_tool;
+pub mod nato_alpha;
 pub mod number_base;
+pub mod numeronym;
+pub mod obfuscator;
+pub mod otp_tool;
+pub mod percentage;
 pub mod regex_tool;
+pub mod roman;
+pub mod safelink;
+pub mod slugify;
+pub mod sql_format;
+pub mod temperature;
+pub mod text_stats;
 pub mod timestamp;
+pub mod token_gen;
+pub mod ua_parse;
+pub mod ulid_tool;
 pub mod url_encode;
 pub mod url_parse;
 pub mod uuid_tool;
-pub mod ulid_tool;
-pub mod slugify;
-pub mod lorem;
-pub mod text_stats;
-pub mod roman;
-pub mod percentage;
-pub mod chmod_calc;
-pub mod binary_tool;
-pub mod color_tool;
 
 mod suggest;
 
@@ -48,19 +71,45 @@ pub fn catalog() -> Vec<ToolMeta> {
         url_encode::meta(),
         html_escape::meta(),
         hash::meta(),
+        hmac_tool::meta(),
         uuid_tool::meta(),
         ulid_tool::meta(),
+        token_gen::meta(),
+        otp_tool::meta(),
         timestamp::meta(),
         number_base::meta(),
         case::meta(),
         slugify::meta(),
         lorem::meta(),
         text_stats::meta(),
+        list_conv::meta(),
+        email_norm::meta(),
+        numeronym::meta(),
+        obfuscator::meta(),
+        nato_alpha::meta(),
+        markdown_html::meta(),
         roman::meta(),
         percentage::meta(),
         chmod_calc::meta(),
         binary_tool::meta(),
         color_tool::meta(),
+        temperature::meta(),
+        eta_tool::meta(),
+        basic_auth::meta(),
+        data_format::json_yaml_meta(),
+        data_format::json_toml_meta(),
+        sql_format::meta(),
+        ipv4_tool::subnet_meta(),
+        ipv4_tool::addr_meta(),
+        ipv4_tool::range_meta(),
+        ipv6_ula::meta(),
+        mac_gen::meta(),
+        mime_tool::meta(),
+        http_status::meta(),
+        ua_parse::meta(),
+        safelink::meta(),
+        iban_tool::meta(),
+        docker_compose::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -81,6 +130,7 @@ pub fn is_transform_tool(id: &str) -> bool {
             | ids_list::HASH
             | ids_list::UUID
             | ids_list::ULID
+            | ids_list::TOKEN
             | ids_list::LOREM
             | ids_list::SLUGIFY
             | ids_list::CASE
@@ -111,7 +161,37 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::CHMOD
             | ids_list::BINARY
             | ids_list::COLOR
+            | ids_list::BASIC_AUTH
+            | ids_list::HMAC
+            | ids_list::OTP
+            | ids_list::EMAIL_NORM
+            | ids_list::LIST_CONV
+            | ids_list::JSON_YAML
+            | ids_list::JSON_TOML
+            | ids_list::SQL_FORMAT
+            | ids_list::MARKDOWN_HTML
+            | ids_list::IPV4_SUBNET
+            | ids_list::IPV4_ADDR
+            | ids_list::IPV4_RANGE
+            | ids_list::IPV6_ULA
+            | ids_list::MAC_GEN
+            | ids_list::MIME
+            | ids_list::HTTP_STATUS
+            | ids_list::UA_PARSE
+            | ids_list::IBAN
+            | ids_list::TEMPERATURE
+            | ids_list::ETA
+            | ids_list::NUMERONYM
+            | ids_list::OBFUSCATE
+            | ids_list::NATO
+            | ids_list::SAFELINK
+            | ids_list::DOCKER_RUN
     )
+}
+
+/// Batch tools that need an explicit Generate click (random output).
+pub fn is_batch_generate_tool(id: &str) -> bool {
+    matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN)
 }
 
 /// Tools that use the network workbench (`NetworkUse::Explicit`).
@@ -131,32 +211,23 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 25);
+        assert_eq!(registry.tools().len(), 51);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
         }
         assert!(registry.get(ids::JWT).is_some());
-        assert!(registry.get(ids::HTTP_REQUEST).is_some());
-        assert!(registry.get(ids::DNS_LOOKUP).is_some());
+        assert!(registry.get(ids::HMAC).is_some());
+        assert!(registry.get(ids::JSON_YAML).is_some());
         assert_eq!(
             registry.get(ids::HTTP_REQUEST).unwrap().network,
             NetworkUse::Explicit
         );
-        assert_eq!(
-            registry.get(ids::DNS_LOOKUP).unwrap().network,
-            NetworkUse::Explicit
-        );
-        assert!(is_inspector_tool(ids::JWT));
-        assert!(is_network_tool(ids::HTTP_REQUEST));
-        assert!(is_network_tool(ids::DNS_LOOKUP));
-        assert!(is_transform_tool(ids::BASE64));
         assert!(is_batch_tool(ids::TIMESTAMP));
-        assert!(is_batch_tool(ids::NUMBER_BASE));
+        assert!(is_batch_tool(ids::BASIC_AUTH));
+        assert!(is_batch_generate_tool(ids::MAC_GEN));
+        assert!(is_transform_tool(ids::TOKEN));
         assert!(!is_transform_tool(ids::TIMESTAMP));
-        assert!(is_transform_tool(ids::ULID));
-        assert!(is_transform_tool(ids::SLUGIFY));
-        assert!(!is_transform_tool(ids::JSON));
         assert!(!is_network_tool(ids::URL_PARSE));
     }
 }

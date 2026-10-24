@@ -2,7 +2,7 @@
 
 use md5::Md5;
 use sha1::{Digest, Sha1};
-use sha2::{Sha256, Sha512};
+use sha2::{Sha256, Sha384, Sha512};
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,17 +10,19 @@ pub enum Algorithm {
     Md5,
     Sha1,
     Sha256,
+    Sha384,
     Sha512,
 }
 
 impl Algorithm {
-    pub const ALL: [Self; 4] = [Self::Md5, Self::Sha1, Self::Sha256, Self::Sha512];
+    pub const ALL: [Self; 5] = [Self::Md5, Self::Sha1, Self::Sha256, Self::Sha384, Self::Sha512];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Md5 => "MD5",
             Self::Sha1 => "SHA-1",
             Self::Sha256 => "SHA-256",
+            Self::Sha384 => "SHA-384",
             Self::Sha512 => "SHA-512",
         }
     }
@@ -29,7 +31,7 @@ impl Algorithm {
     pub fn safety_note(self) -> Option<&'static str> {
         match self {
             Self::Md5 | Self::Sha1 => Some("不用于密码或完整性安全"),
-            Self::Sha256 | Self::Sha512 => None,
+            Self::Sha256 | Self::Sha384 | Self::Sha512 => None,
         }
     }
 }
@@ -39,8 +41,8 @@ pub fn meta() -> ToolMeta {
         id: ids::HASH,
         name: "Hash",
         category: Category::Security,
-        summary: "MD5、SHA-1、SHA-256、SHA-512。MD5/SHA-1 仅用于校验和兼容。",
-        keywords: &["hash", "md5", "sha1", "sha256", "sha512", "摘要", "校验"],
+        summary: "MD5、SHA-1、SHA-256、SHA-384、SHA-512。MD5/SHA-1 仅用于校验和兼容。",
+        keywords: &["hash", "md5", "sha1", "sha256", "sha384", "sha512", "摘要", "校验"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -53,6 +55,7 @@ pub fn digest(input: &str, algorithm: Algorithm) -> String {
         Algorithm::Md5 => hex(Md5::digest(bytes)),
         Algorithm::Sha1 => hex(Sha1::digest(bytes)),
         Algorithm::Sha256 => hex(Sha256::digest(bytes)),
+        Algorithm::Sha384 => hex(Sha384::digest(bytes)),
         Algorithm::Sha512 => hex(Sha512::digest(bytes)),
     }
 }

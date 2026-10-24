@@ -24,10 +24,14 @@ serde_json = { version = "1", features = ["preserve_order"] }
 md-5 = "0.10"
 sha1 = "0.10"
 sha2 = "0.10"
+hmac = "0.12"
 # Pin keeps tools building on rustc 1.85+; newer uuid raises rust-version.
 uuid = { version = "=1.11.0", features = ["v4", "v7"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 percent-encoding = "2"
+serde_yaml = "0.9"
+toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
 
 # M3 inspectors — portable, no network.
 regex = "1"
