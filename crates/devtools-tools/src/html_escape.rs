@@ -28,7 +28,7 @@ pub fn meta() -> ToolMeta {
         id: ids::HTML_ESCAPE,
         name: "HTML Escape",
         category: Category::Encoding,
-        summary: "HTML 实体转义与反转义批量展示；含 & 时优先反转义。",
+        summary: "HTML 实体转义/反转义切换；含 & 实体时默认反转义。",
         keywords: &["html", "escape", "entity", "实体", "转义"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -116,44 +116,62 @@ fn decode_numeric(body: &str) -> Option<char> {
 }
 
 
-pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HtmlMode {
+    Escape,
+    Unescape,
+}
+
+impl HtmlMode {
+    pub const ALL: [HtmlMode; 2] = [HtmlMode::Escape, HtmlMode::Unescape];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Escape => "转义",
+            Self::Unescape => "反转义",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Escape
+    }
+}
+
+/// Prefer unescape when input contains entities that decode.
+pub fn suggest_mode(input: &str) -> HtmlMode {
+    let t = input.trim();
+    if t.contains('&')
+        && let Ok(u) = unescape(t)
+        && u != t
+    {
+        return HtmlMode::Unescape;
+    }
+    HtmlMode::Escape
+}
+
+pub fn convert_mode(input: &str, mode: HtmlMode) -> Result<Vec<(&'static str, String)>, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err("输入为空".into());
     }
-    let escaped = escape(trimmed);
-    let mut rows = vec![("转义", escaped.clone())];
-    match unescape(trimmed) {
-        Ok(u) if u != trimmed => {
-            rows.insert(0, ("反转义", u.clone()));
-            rows.push(("再转义", escape(&u)));
+    match mode {
+        HtmlMode::Escape => Ok(vec![("转义", escape(trimmed))]),
+        HtmlMode::Unescape => {
+            let u = unescape(trimmed).map_err(|e| e.to_string())?;
+            Ok(vec![("反转义", u)])
         }
-        Ok(_) => {
-            if let Ok(u) = unescape(&escaped) {
-                rows.push(("转义后再反转义", u));
-            }
-        }
-        Err(e) => rows.push(("反转义", format!("（失败：{e}）"))),
     }
-    if trimmed.contains('&')
-        && let Ok(u) = unescape(trimmed)
-    {
-        rows = vec![
-            ("反转义", u.clone()),
-            ("转义", escape(&u)),
-            ("原文", trimmed.to_string()),
-        ];
-    }
-    Ok(rows)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn convert_all_entity() {
-        let rows = convert_all("&lt;a&gt;").unwrap();
+    fn convert_mode_entity() {
+        let rows = convert_mode("&lt;a&gt;", HtmlMode::Unescape).unwrap();
         assert_eq!(rows[0].1, "<a>");
+        assert_eq!(suggest_mode("&lt;a&gt;"), HtmlMode::Unescape);
+        assert_eq!(suggest_mode("<a>"), HtmlMode::Escape);
     }
 
     #[test]

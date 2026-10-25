@@ -47,13 +47,34 @@ impl fmt::Display for UrlEncodeError {
 
 impl std::error::Error for UrlEncodeError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UrlMode {
+    Encode,
+    Decode,
+}
+
+impl UrlMode {
+    pub const ALL: [UrlMode; 2] = [UrlMode::Encode, UrlMode::Decode];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Encode => "编码",
+            Self::Decode => "解码",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Encode
+    }
+}
+
 pub fn meta() -> ToolMeta {
     ToolMeta {
         id: ids::URL_ENCODE,
         name: "URL Encode",
         category: Category::Encoding,
-        summary: "URL 组件编码与解码批量展示；含 % 时优先解码。",
-        keywords: &["url", "encode", "percent", "uri", "编码", "百分号"],
+        summary: "URL 组件编码/解码切换；含 % 时默认解码。",
+        keywords: &["url", "encode", "percent", "uri", "编码", "百分号", "解码"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -77,40 +98,30 @@ pub fn decode(input: &str) -> Result<String, UrlEncodeError> {
         })
 }
 
+/// Prefer decode when input looks percent-encoded and decodes cleanly.
+pub fn suggest_mode(input: &str) -> UrlMode {
+    let t = input.trim();
+    if t.contains('%')
+        && let Ok(decoded) = decode(t)
+        && decoded != t
+    {
+        return UrlMode::Decode;
+    }
+    UrlMode::Encode
+}
 
-/// Encoded + decoded when percent-encoding is present / always both views.
-pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+pub fn convert_mode(input: &str, mode: UrlMode) -> Result<Vec<(&'static str, String)>, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err("输入为空".into());
     }
-    let encoded = encode(trimmed);
-    let mut rows = vec![("编码", encoded.clone())];
-    match decode(trimmed) {
-        Ok(decoded) if decoded != trimmed => {
-            rows.push(("解码", decoded));
-        }
-        Ok(_) => {
-            // already plain; still show decode of encoded form
-            if let Ok(round) = decode(&encoded) {
-                rows.push(("编码后再解码", round));
-            }
-        }
-        Err(_) => {
-            rows.push(("解码", "（无法作为百分号编码解码）".into()));
+    match mode {
+        UrlMode::Encode => Ok(vec![("编码", encode(trimmed))]),
+        UrlMode::Decode => {
+            let decoded = decode(trimmed).map_err(|e| e.to_string())?;
+            Ok(vec![("解码", decoded)])
         }
     }
-    // If input itself was encoded, prefer showing decode first usefulness
-    if trimmed.contains('%')
-        && let Ok(decoded) = decode(trimmed)
-    {
-        rows = vec![
-            ("解码", decoded.clone()),
-            ("编码", encode(&decoded)),
-            ("原文", trimmed.to_string()),
-        ];
-    }
-    Ok(rows)
 }
 
 #[cfg(test)]
@@ -118,10 +129,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn convert_all_detects_encoded() {
-        let rows = convert_all("a%20b").unwrap();
-        assert_eq!(rows[0].0, "解码");
-        assert_eq!(rows[0].1, "a b");
+    fn suggest_decode_when_percent() {
+        assert_eq!(suggest_mode("a%20b"), UrlMode::Decode);
+        assert_eq!(suggest_mode("hello world"), UrlMode::Encode);
+    }
+
+    #[test]
+    fn convert_mode_one_row() {
+        let enc = convert_mode("a b", UrlMode::Encode).unwrap();
+        assert_eq!(enc, vec![("编码", "a%20b".into())]);
+        let dec = convert_mode("a%20b", UrlMode::Decode).unwrap();
+        assert_eq!(dec, vec![("解码", "a b".into())]);
     }
 
     #[test]
@@ -147,8 +165,6 @@ mod tests {
 
     #[test]
     fn invalid_percent_sequence_is_rejected() {
-        // Lone % leaves invalid UTF-8 when treated as raw bytes with 0x25 followed by junk;
-        // percent-encoding crate may keep %GG as literal bytes. Force a bad UTF-8 path:
         let error = decode("%80").unwrap_err();
         assert!(error.message.contains("UTF-8"));
     }

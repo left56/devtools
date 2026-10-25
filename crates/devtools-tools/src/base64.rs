@@ -12,6 +12,38 @@ pub enum Alphabet {
     UrlSafe,
 }
 
+impl Alphabet {
+    pub const ALL: [Alphabet; 2] = [Alphabet::Standard, Alphabet::UrlSafe];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "标准",
+            Self::UrlSafe => "URL-safe",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Base64Mode {
+    Encode,
+    Decode,
+}
+
+impl Base64Mode {
+    pub const ALL: [Base64Mode; 2] = [Base64Mode::Encode, Base64Mode::Decode];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Encode => "编码",
+            Self::Decode => "解码",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Encode
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Base64Error {
     pub message: String,
@@ -30,7 +62,7 @@ pub fn meta() -> ToolMeta {
         id: ids::BASE64,
         name: "Base64",
         category: Category::Encoding,
-        summary: "Base64 批量：标准/URL-safe 编码，并在可解码时给出解码结果。",
+        summary: "Base64 编码/解码切换；编码可选手标准或 URL-safe；像 Base64 时默认解码。",
         keywords: &["base64", "编码", "解码", "url-safe"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -44,41 +76,74 @@ pub fn encode(input: &str, alphabet: Alphabet) -> String {
     }
 }
 
-/// One input → encode both alphabets; if input looks like Base64, also decode.
-pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return Err("输入为空".into());
-    }
-    let mut rows = vec![
-        ("标准编码", encode(trimmed, Alphabet::Standard)),
-        ("URL-safe 编码", encode(trimmed, Alphabet::UrlSafe)),
-    ];
-    let std_dec = decode(trimmed, Alphabet::Standard).ok();
-    let url_dec = decode(trimmed, Alphabet::UrlSafe).ok();
-    if looks_like_base64(trimmed) || std_dec.is_some() || url_dec.is_some() {
-        if let Some(t) = std_dec {
-            rows.push(("标准解码", t.clone()));
-            if let Some(u) = url_dec
-                && u != t
-            {
-                rows.push(("URL-safe 解码", u));
-            }
-        } else if let Some(u) = url_dec {
-            rows.push(("URL-safe 解码", u));
-        }
-    }
-    Ok(rows)
-}
-
-fn looks_like_base64(s: &str) -> bool {
+pub fn looks_like_base64(s: &str) -> bool {
     let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
     if cleaned.len() < 4 {
         return false;
     }
-    cleaned.bytes().all(|b| {
+    let charset_ok = cleaned.bytes().all(|b| {
         b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'-' | b'_' | b'=')
-    })
+    });
+    charset_ok
+        && decode(s, Alphabet::Standard)
+            .or_else(|_| decode(s, Alphabet::UrlSafe))
+            .is_ok()
+}
+
+/// Prefer decode when input looks like Base64 and decodes as UTF-8.
+pub fn suggest_mode(input: &str) -> Base64Mode {
+    let t = input.trim();
+    if looks_like_base64(t) {
+        Base64Mode::Decode
+    } else {
+        Base64Mode::Encode
+    }
+}
+
+pub fn convert_mode(
+    input: &str,
+    mode: Base64Mode,
+    alphabet: Alphabet,
+) -> Result<Vec<(&'static str, String)>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("输入为空".into());
+    }
+    match mode {
+        Base64Mode::Encode => Ok(vec![
+            ("标准编码", encode(trimmed, Alphabet::Standard)),
+            ("URL-safe 编码", encode(trimmed, Alphabet::UrlSafe)),
+        ]),
+        Base64Mode::Decode => {
+            // Prefer the selected alphabet; fall back to the other.
+            let primary = decode(trimmed, alphabet);
+            let fallback = match alphabet {
+                Alphabet::Standard => Alphabet::UrlSafe,
+                Alphabet::UrlSafe => Alphabet::Standard,
+            };
+            match primary {
+                Ok(t) => Ok(vec![(
+                    if alphabet == Alphabet::Standard {
+                        "标准解码"
+                    } else {
+                        "URL-safe 解码"
+                    },
+                    t,
+                )]),
+                Err(_) => {
+                    let t = decode(trimmed, fallback).map_err(|e| e.to_string())?;
+                    Ok(vec![(
+                        if fallback == Alphabet::Standard {
+                            "标准解码"
+                        } else {
+                            "URL-safe 解码"
+                        },
+                        t,
+                    )])
+                }
+            }
+        }
+    }
 }
 
 pub fn decode(input: &str, alphabet: Alphabet) -> Result<String, Base64Error> {
@@ -88,7 +153,6 @@ pub fn decode(input: &str, alphabet: Alphabet) -> Result<String, Base64Error> {
             message: "输入为空".into(),
         });
     }
-    // Accept both padded and unpadded URL-safe. Standard requires padding when needed.
     let bytes = match alphabet {
         Alphabet::Standard => STANDARD.decode(trimmed).map_err(|error| Base64Error {
             message: format!("标准 Base64 解码失败：{error}"),
@@ -140,17 +204,18 @@ mod tests {
 
     #[test]
     fn non_utf8_payload_is_rejected() {
-        // 0xff alone is invalid UTF-8; /w== is standard Base64 for [0xff].
         let error = decode("/w==", Alphabet::Standard).unwrap_err();
         assert!(error.message.contains("UTF-8"));
     }
 
     #[test]
-    fn convert_all_text_and_encoded() {
-        let rows = convert_all("hi").unwrap();
+    fn convert_mode_encode_and_decode() {
+        let rows = convert_mode("hi", Base64Mode::Encode, Alphabet::Standard).unwrap();
         assert!(rows.iter().any(|r| r.0 == "标准编码" && r.1 == "aGk="));
         let enc = encode("hi", Alphabet::Standard);
-        let rows2 = convert_all(&enc).unwrap();
-        assert!(rows2.iter().any(|r| r.0 == "标准解码" && r.1 == "hi"));
+        assert_eq!(suggest_mode(&enc), Base64Mode::Decode);
+        let rows2 = convert_mode(&enc, Base64Mode::Decode, Alphabet::Standard).unwrap();
+        assert_eq!(rows2[0].1, "hi");
+        assert_eq!(suggest_mode("hi"), Base64Mode::Encode);
     }
 }

@@ -13,12 +13,16 @@ use crate::{
 };
 use devtools_core::ids;
 use devtools_tools::{
-    ascii_drawer, base64, base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case,
+    ascii_drawer,
+    base64::{self, Alphabet as B64Alphabet, Base64Mode},
+    base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case,
     chmod_calc,
     color_tool, cron_presets, csv_tool,
     data_format::{self, FormatKind},
     docker_compose, email_norm, encrypt_tool,
-    eta_tool, git_memo, hash, hmac_tool, html_escape, http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
+    eta_tool, git_memo, hash, hmac_tool,
+    html_escape::{self, HtmlMode},
+    http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
     keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
     number_base,
     number_base::Base,
@@ -26,7 +30,9 @@ use devtools_tools::{
     random_port, regex_memo, roman, rsa_tool, safelink, slugify,
     sql_format::{self, SqlMode},
     svg_placeholder,
-    temperature, text_stats, timestamp, ua_parse, unicode_escape, url_encode, wifi_qr,
+    temperature, text_stats, timestamp, ua_parse, unicode_escape,
+    url_encode::{self, UrlMode},
+    wifi_qr,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -43,6 +49,13 @@ pub struct BatchWorkbench {
     data_in: Option<FormatKind>,
     data_out: FormatKind,
     sql_mode: SqlMode,
+    url_mode: UrlMode,
+    url_mode_manual: bool,
+    html_mode: HtmlMode,
+    html_mode_manual: bool,
+    b64_mode: Base64Mode,
+    b64_mode_manual: bool,
+    b64_alphabet: B64Alphabet,
     result_scroll: ScrollHandle,
 }
 
@@ -72,6 +85,13 @@ impl BatchWorkbench {
             data_in: None,
             data_out: FormatKind::default_output(),
             sql_mode: SqlMode::default_mode(),
+            url_mode: UrlMode::default_mode(),
+            url_mode_manual: false,
+            html_mode: HtmlMode::default_mode(),
+            html_mode_manual: false,
+            b64_mode: Base64Mode::default_mode(),
+            b64_mode_manual: false,
+            b64_alphabet: B64Alphabet::Standard,
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -104,6 +124,13 @@ impl BatchWorkbench {
             self.data_in = None;
             self.data_out = FormatKind::default_output();
             self.sql_mode = SqlMode::default_mode();
+            self.url_mode = UrlMode::default_mode();
+            self.url_mode_manual = false;
+            self.html_mode = HtmlMode::default_mode();
+            self.html_mode_manual = false;
+            self.b64_mode = Base64Mode::default_mode();
+            self.b64_mode_manual = false;
+            self.b64_alphabet = B64Alphabet::Standard;
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
                 field.set_multiline(
@@ -243,6 +270,13 @@ impl BatchWorkbench {
             cx.notify();
             return;
         }
+        if self.tool_id == ids::URL_ENCODE && !self.url_mode_manual {
+            self.url_mode = url_encode::suggest_mode(&input);
+        } else if self.tool_id == ids::HTML_ESCAPE && !self.html_mode_manual {
+            self.html_mode = html_escape::suggest_mode(&input);
+        } else if self.tool_id == ids::BASE64 && !self.b64_mode_manual {
+            self.b64_mode = base64::suggest_mode(&input);
+        }
         match run_batch(
             self.tool_id,
             &input,
@@ -250,6 +284,10 @@ impl BatchWorkbench {
             self.data_in,
             self.data_out,
             self.sql_mode,
+            self.url_mode,
+            self.html_mode,
+            self.b64_mode,
+            self.b64_alphabet,
         ) {
             Ok(rows) => {
                 self.rows = rows;
@@ -266,9 +304,9 @@ impl BatchWorkbench {
     fn title(&self) -> (&'static str, &'static str) {
         match self.tool_id {
             ids::TIMESTAMP => ("日期时间", "自动识别 · 批量格式 · 默认当前时间"),
-            ids::BASE64 => ("Base64", "标准 / URL-safe 编码，可解码时一并展示"),
-            ids::URL_ENCODE => ("URL Encode", "编码与解码批量 · 含 % 优先解码"),
-            ids::HTML_ESCAPE => ("HTML Escape", "转义与反转义批量"),
+            ids::BASE64 => ("Base64", "编码 / 解码切换 · 像 Base64 时默认解码"),
+            ids::URL_ENCODE => ("URL Encode", "编码 / 解码切换 · 含 % 时默认解码"),
+            ids::HTML_ESCAPE => ("HTML Escape", "转义 / 反转义切换 · 含实体时默认反转义"),
             ids::HASH => ("Hash", "MD5/SHA 全家桶 · 弱算法已标注"),
             ids::CASE => ("Case", "snake / camel / Pascal / kebab / CONSTANT / Title"),
             ids::SLUGIFY => ("Slugify", "Slug 与规范化变体"),
@@ -331,7 +369,59 @@ impl BatchWorkbench {
     fn options_bar(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         let mut row = div().flex().flex_wrap().items_center().gap_2();
-        if self.tool_id == ids::SQL_FORMAT {
+        if self.tool_id == ids::URL_ENCODE {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in UrlMode::ALL {
+                let active = self.url_mode == mode;
+                let id = format!("url-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.url_mode = mode;
+                        this.url_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::HTML_ESCAPE {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in HtmlMode::ALL {
+                let active = self.html_mode == mode;
+                let id = format!("html-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.html_mode = mode;
+                        this.html_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::BASE64 {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in Base64Mode::ALL {
+                let active = self.b64_mode == mode;
+                let id = format!("b64-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.b64_mode = mode;
+                        this.b64_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+            if self.b64_mode == Base64Mode::Decode {
+                row = row.child(div().text_xs().text_color(theme.muted).child("字母表"));
+                for alpha in B64Alphabet::ALL {
+                    let active = self.b64_alphabet == alpha;
+                    let id = format!("b64-alpha-{}", alpha.label());
+                    row = row.child(chip(theme, id, alpha.label(), active).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            this.b64_alphabet = alpha;
+                            this.live_refresh(cx);
+                        },
+                    )));
+                }
+            }
+        } else if self.tool_id == ids::SQL_FORMAT {
             row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
             for mode in SqlMode::ALL {
                 let active = self.sql_mode == mode;
@@ -756,6 +846,10 @@ fn run_batch(
     data_in: Option<FormatKind>,
     data_out: FormatKind,
     sql_mode: SqlMode,
+    url_mode: UrlMode,
+    html_mode: HtmlMode,
+    b64_mode: Base64Mode,
+    b64_alphabet: B64Alphabet,
 ) -> Result<Vec<(&'static str, String)>, String> {
     match tool_id {
         ids::TIMESTAMP => timestamp::convert_all(input)
@@ -765,9 +859,9 @@ fn run_batch(
                     .collect()
             })
             .map_err(|e| e.to_string()),
-        ids::BASE64 => base64::convert_all(input),
-        ids::URL_ENCODE => url_encode::convert_all(input),
-        ids::HTML_ESCAPE => html_escape::convert_all(input),
+        ids::BASE64 => base64::convert_mode(input, b64_mode, b64_alphabet),
+        ids::URL_ENCODE => url_encode::convert_mode(input, url_mode),
+        ids::HTML_ESCAPE => html_escape::convert_mode(input, html_mode),
         ids::HASH => hash::convert_all(input),
         ids::CASE => case::convert_all(input),
         ids::SLUGIFY => slugify::convert_all(input),
