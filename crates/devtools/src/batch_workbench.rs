@@ -473,18 +473,16 @@ impl BatchWorkbench {
                     },
                 )));
             }
-            if self.b64_mode == Base64Mode::Decode {
-                row = row.child(div().text_xs().text_color(theme.muted).child("字母表"));
-                for alpha in B64Alphabet::ALL {
-                    let active = self.b64_alphabet == alpha;
-                    let id = format!("b64-alpha-{}", alpha.label());
-                    row = row.child(chip(theme, id, alpha.label(), active).on_click(cx.listener(
-                        move |this, _, _, cx| {
-                            this.b64_alphabet = alpha;
-                            this.live_refresh(cx);
-                        },
-                    )));
-                }
+            row = row.child(div().text_xs().text_color(theme.muted).child("字母表"));
+            for alpha in B64Alphabet::ALL {
+                let active = self.b64_alphabet == alpha;
+                let id = format!("b64-alpha-{}", alpha.label());
+                row = row.child(chip(theme, id, alpha.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.b64_alphabet = alpha;
+                        this.live_refresh(cx);
+                    },
+                )));
             }
         } else if self.tool_id == ids::SQL_FORMAT {
             row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
@@ -796,15 +794,29 @@ impl BatchWorkbench {
 
     /// Tools whose single mode result should fill the whole result pane
     /// (no nested label | mini-box | 复制 row). Mode chips live in the options bar.
-    fn uses_full_result_pane(tool_id: &str) -> bool {
-        matches!(tool_id, ids::SQL_FORMAT)
+    fn uses_full_result_pane(tool_id: &str, row_count: usize) -> bool {
+        // Mode chips select one document result — fill the pane like input (no nested row).
+        // Only when the selected mode actually produced a single row (Base64 encode used
+        // to emit two alphabets; Unicode escape still emits several styles).
+        row_count <= 1
+            && matches!(
+                tool_id,
+                ids::SQL_FORMAT
+                    | ids::DATA_FORMAT
+                    | ids::URL_ENCODE
+                    | ids::HTML_ESCAPE
+                    | ids::BASE64
+                    | ids::XML_TOOL
+                    | ids::MARKDOWN_HTML
+                    | ids::UNICODE_ESC
+            )
     }
 
     /// Multi-line / generate tools: values may wrap; enclosed in a pane.
     fn result_pane(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
         // SQL (and similar): one document fills the pane — mirror the input side.
-        if Self::uses_full_result_pane(self.tool_id) {
+        if Self::uses_full_result_pane(self.tool_id, self.rows.len()) {
             return self.full_document_result_pane(cx);
         }
         let header = pane_header(theme).child(pane_title(theme, "结果"));

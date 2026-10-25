@@ -110,10 +110,14 @@ pub fn convert_mode(
         return Err("输入为空".into());
     }
     match mode {
-        Base64Mode::Encode => Ok(vec![
-            ("标准编码", encode(trimmed, Alphabet::Standard)),
-            ("URL-safe 编码", encode(trimmed, Alphabet::UrlSafe)),
-        ]),
+        Base64Mode::Encode => {
+            let label = if alphabet == Alphabet::Standard {
+                "标准编码"
+            } else {
+                "URL-safe 编码"
+            };
+            Ok(vec![(label, encode(trimmed, alphabet))])
+        }
         Base64Mode::Decode => {
             // Prefer the selected alphabet; fall back to the other.
             let primary = decode(trimmed, alphabet);
@@ -211,7 +215,9 @@ mod tests {
     #[test]
     fn convert_mode_encode_and_decode() {
         let rows = convert_mode("hi", Base64Mode::Encode, Alphabet::Standard).unwrap();
-        assert!(rows.iter().any(|r| r.0 == "标准编码" && r.1 == "aGk="));
+        assert_eq!(rows, vec![("标准编码", "aGk=".into())]);
+        let rows_url = convert_mode("hi", Base64Mode::Encode, Alphabet::UrlSafe).unwrap();
+        assert_eq!(rows_url[0].0, "URL-safe 编码");
         let enc = encode("hi", Alphabet::Standard);
         assert_eq!(suggest_mode(&enc), Base64Mode::Decode);
         let rows2 = convert_mode(&enc, Base64Mode::Decode, Alphabet::Standard).unwrap();
