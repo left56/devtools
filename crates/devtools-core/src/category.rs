@@ -8,10 +8,11 @@ pub enum Category {
     Generators,
     Web,
     Security,
+    Graphics,
 }
 
 impl Category {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Data,
         Self::Encoding,
         Self::Text,
@@ -19,6 +20,7 @@ impl Category {
         Self::Generators,
         Self::Web,
         Self::Security,
+        Self::Graphics,
     ];
 
     /// Stable English id. Not a display string.
@@ -31,6 +33,7 @@ impl Category {
             Self::Generators => "generators",
             Self::Web => "web",
             Self::Security => "security",
+            Self::Graphics => "graphics",
         }
     }
 
@@ -45,6 +48,7 @@ impl Category {
             Self::Generators => "生成",
             Self::Web => "网络",
             Self::Security => "安全",
+            Self::Graphics => "图形",
         }
     }
 }

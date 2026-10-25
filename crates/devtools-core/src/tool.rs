@@ -83,7 +83,17 @@ pub mod ids {
     pub const BIP39: &str = "bip39";
     pub const CERT_DECODE: &str = "cert-decode";
     pub const BASE64_FILE: &str = "base64-file";
+    pub const IP_LOCATION: &str = "ip-location";
+    pub const NETWORK_INFO: &str = "network-info";
+    pub const SPEED_TEST: &str = "speed-test";
+    pub const WHOIS: &str = "whois";
+    pub const BASE64_IMAGE: &str = "base64-image";
+    pub const COLOR_PALETTES: &str = "color-palettes";
+    pub const RULER: &str = "ruler";
+    pub const SVG_EDIT: &str = "svg-edit";
+    pub const TAILWIND_COLORS: &str = "tailwind-colors";
 }
+
 
 /// Whether running the tool contacts the network.
 ///

@@ -74,10 +74,10 @@ pub struct HttpResponse {
 pub fn meta() -> ToolMeta {
     ToolMeta {
         id: ids::HTTP_REQUEST,
-        name: "HTTP Request",
+        name: "HTTP Client",
         category: Category::Web,
-        summary: "显式发送 HTTP 请求。打开工具不会联网；运行前会提示会访问网络。",
-        keywords: &["http", "request", "curl", "api", "请求", "联网"],
+        summary: "HTTP 客户端：显式发送请求。打开工具不会联网；需点击「运行」。",
+        keywords: &["http", "request", "client", "curl", "api", "请求", "客户端", "联网"],
         network: NetworkUse::Explicit,
         availability: Availability::Ready,
     }

@@ -5,10 +5,10 @@ use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 pub fn meta() -> ToolMeta {
     ToolMeta {
         id: ids::COLOR,
-        name: "Color converter",
-        category: Category::Data,
-        summary: "颜色互转：#hex、rgb()、hsl()。自动识别，批量输出。",
-        keywords: &["color", "hex", "rgb", "hsl", "颜色"],
+        name: "Color Inspector",
+        category: Category::Graphics,
+        summary: "颜色检查器：#hex / rgb / hsl / hsv / cmyk 互转。",
+        keywords: &["color", "hex", "rgb", "hsl", "hsv", "cmyk", "颜色", "取色"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -24,11 +24,40 @@ pub struct Rgb {
 pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
     let rgb = parse(input)?;
     let (h, s, l) = rgb_to_hsl(rgb);
+    let (hv, sv, vv) = rgb_to_hsv(rgb);
+    let (c, m, y, k) = rgb_to_cmyk(rgb);
     Ok(vec![
         ("HEX", format!("#{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b)),
         ("hex", format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b)),
         ("RGB", format!("rgb({}, {}, {})", rgb.r, rgb.g, rgb.b)),
-        ("HSL", format!("hsl({}, {}%, {}%)", h.round() as i32, (s * 100.0).round() as i32, (l * 100.0).round() as i32)),
+        (
+            "HSL",
+            format!(
+                "hsl({}, {}%, {}%)",
+                h.round() as i32,
+                (s * 100.0).round() as i32,
+                (l * 100.0).round() as i32
+            ),
+        ),
+        (
+            "HSV",
+            format!(
+                "hsv({}, {}%, {}%)",
+                hv.round() as i32,
+                (sv * 100.0).round() as i32,
+                (vv * 100.0).round() as i32
+            ),
+        ),
+        (
+            "CMYK",
+            format!(
+                "cmyk({}%, {}%, {}%, {}%)",
+                (c * 100.0).round() as i32,
+                (m * 100.0).round() as i32,
+                (y * 100.0).round() as i32,
+                (k * 100.0).round() as i32
+            ),
+        ),
         ("R", rgb.r.to_string()),
         ("G", rgb.g.to_string()),
         ("B", rgb.b.to_string()),
@@ -147,6 +176,43 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Rgb {
         g: ((g1 + m) * 255.0).round().clamp(0.0, 255.0) as u8,
         b: ((b1 + m) * 255.0).round().clamp(0.0, 255.0) as u8,
     }
+}
+
+
+fn rgb_to_hsv(rgb: Rgb) -> (f64, f64, f64) {
+    let r = rgb.r as f64 / 255.0;
+    let g = rgb.g as f64 / 255.0;
+    let b = rgb.b as f64 / 255.0;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let v = max;
+    let d = max - min;
+    let s = if max == 0.0 { 0.0 } else { d / max };
+    let h = if d < f64::EPSILON {
+        0.0
+    } else if (max - r).abs() < f64::EPSILON {
+        60.0 * (((g - b) / d) % 6.0)
+    } else if (max - g).abs() < f64::EPSILON {
+        60.0 * (((b - r) / d) + 2.0)
+    } else {
+        60.0 * (((r - g) / d) + 4.0)
+    };
+    let h = if h < 0.0 { h + 360.0 } else { h };
+    (h, s, v)
+}
+
+fn rgb_to_cmyk(rgb: Rgb) -> (f64, f64, f64, f64) {
+    let r = rgb.r as f64 / 255.0;
+    let g = rgb.g as f64 / 255.0;
+    let b = rgb.b as f64 / 255.0;
+    let k = 1.0 - r.max(g).max(b);
+    if (1.0 - k).abs() < f64::EPSILON {
+        return (0.0, 0.0, 0.0, 1.0);
+    }
+    let c = (1.0 - r - k) / (1.0 - k);
+    let m = (1.0 - g - k) / (1.0 - k);
+    let y = (1.0 - b - k) / (1.0 - k);
+    (c, m, y, k)
 }
 
 #[cfg(test)]

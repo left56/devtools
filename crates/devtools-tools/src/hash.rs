@@ -5,7 +5,7 @@ use md5::Md5;
 use ripemd::Ripemd160;
 use sha1::Sha1;
 use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
-use sha3::Sha3_256;
+use sha3::{Keccak256, Sha3_256, Sha3_512};
 use devtools_core::{Availability, Category, NetworkUse, ToolMeta, ids};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,11 +17,13 @@ pub enum Algorithm {
     Sha384,
     Sha512,
     Sha3_256,
+    Sha3_512,
+    Keccak256,
     Ripemd160,
 }
 
 impl Algorithm {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Md5,
         Self::Sha1,
         Self::Sha224,
@@ -29,6 +31,8 @@ impl Algorithm {
         Self::Sha384,
         Self::Sha512,
         Self::Sha3_256,
+        Self::Sha3_512,
+        Self::Keccak256,
         Self::Ripemd160,
     ];
 
@@ -41,6 +45,8 @@ impl Algorithm {
             Self::Sha384 => "SHA-384",
             Self::Sha512 => "SHA-512",
             Self::Sha3_256 => "SHA3-256",
+            Self::Sha3_512 => "SHA3-512",
+            Self::Keccak256 => "Keccak-256",
             Self::Ripemd160 => "RIPEMD-160",
         }
     }
@@ -65,16 +71,18 @@ impl Algorithm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashEncoding {
     Hex,
+    HexUpper,
     Base64,
     Bin,
 }
 
 impl HashEncoding {
-    pub const ALL: [Self; 3] = [Self::Hex, Self::Base64, Self::Bin];
+    pub const ALL: [Self; 4] = [Self::Hex, Self::HexUpper, Self::Base64, Self::Bin];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Hex => "Hex",
+            Self::HexUpper => "HEX",
             Self::Base64 => "Base64",
             Self::Bin => "Bin",
         }
@@ -88,12 +96,12 @@ impl HashEncoding {
 pub fn meta() -> ToolMeta {
     ToolMeta {
         id: ids::HASH,
-        name: "Hash",
+        name: "Hasher",
         category: Category::Security,
-        summary: "一次输入给出 MD5/SHA-1/SHA-224/SHA-256/SHA-384/SHA-512/SHA3-256/RIPEMD-160。可切换 Hex/Base64/Bin。弱算法已标注。",
+        summary: "Hasher：MD5/SHA/SHA3/Keccak/RIPEMD。可切换 Hex/HEX/Base64/Bin。弱算法已标注。",
         keywords: &[
-            "hash", "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3", "ripemd", "摘要",
-            "校验",
+            "hash", "hasher", "md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3",
+            "keccak", "ripemd", "摘要", "校验",
         ],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
@@ -132,6 +140,8 @@ fn digest_bytes(input: &str, algorithm: Algorithm) -> Vec<u8> {
         Algorithm::Sha384 => Sha384::digest(bytes).to_vec(),
         Algorithm::Sha512 => Sha512::digest(bytes).to_vec(),
         Algorithm::Sha3_256 => Sha3_256::digest(bytes).to_vec(),
+        Algorithm::Sha3_512 => Sha3_512::digest(bytes).to_vec(),
+        Algorithm::Keccak256 => Keccak256::digest(bytes).to_vec(),
         Algorithm::Ripemd160 => Ripemd160::digest(bytes).to_vec(),
     }
 }
@@ -140,6 +150,7 @@ fn format_digest(input: &str, algorithm: Algorithm, encoding: HashEncoding) -> S
     let raw = digest_bytes(input, algorithm);
     match encoding {
         HashEncoding::Hex => hex(&raw),
+        HashEncoding::HexUpper => hex(&raw).to_ascii_uppercase(),
         HashEncoding::Base64 => base64::engine::general_purpose::STANDARD.encode(&raw),
         HashEncoding::Bin => raw
             .iter()

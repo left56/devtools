@@ -82,6 +82,15 @@ pub mod rsa_tool;
 pub mod bip39_tool;
 pub mod cert_decode;
 pub mod base64_file;
+pub mod ip_location;
+pub mod network_info;
+pub mod speed_test;
+pub mod whois_tool;
+pub mod base64_image;
+pub mod color_palettes;
+pub mod ruler_tool;
+pub mod svg_edit;
+pub mod tailwind_colors;
 
 mod suggest;
 
@@ -158,6 +167,15 @@ pub fn catalog() -> Vec<ToolMeta> {
         bip39_tool::meta(),
         cert_decode::meta(),
         base64_file::meta(),
+        ip_location::meta(),
+        network_info::meta(),
+        speed_test::meta(),
+        whois_tool::meta(),
+        base64_image::meta(),
+        color_palettes::meta(),
+        ruler_tool::meta(),
+        svg_edit::meta(),
+        tailwind_colors::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -255,6 +273,11 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::XML_TOOL
             | ids_list::CERT_DECODE
             | ids_list::BASE64_FILE
+            | ids_list::BASE64_IMAGE
+            | ids_list::COLOR_PALETTES
+            | ids_list::RULER
+            | ids_list::SVG_EDIT
+            | ids_list::TAILWIND_COLORS
     )
 }
 
@@ -274,6 +297,9 @@ pub fn is_batch_single_line_tool(id: &str) -> bool {
             | ids_list::PERCENTAGE
             | ids_list::CHMOD
             | ids_list::COLOR
+            | ids_list::COLOR_PALETTES
+            | ids_list::RULER
+            | ids_list::TAILWIND_COLORS
             | ids_list::BASIC_AUTH
             | ids_list::EMAIL_NORM
             | ids_list::IPV4_SUBNET
@@ -306,7 +332,15 @@ pub fn is_batch_generate_tool(id: &str) -> bool {
 
 /// Tools that use the network workbench (`NetworkUse::Explicit`).
 pub fn is_network_tool(id: &str) -> bool {
-    matches!(id, ids_list::HTTP_REQUEST | ids_list::DNS_LOOKUP)
+    matches!(
+        id,
+        ids_list::HTTP_REQUEST
+            | ids_list::DNS_LOOKUP
+            | ids_list::IP_LOCATION
+            | ids_list::NETWORK_INFO
+            | ids_list::SPEED_TEST
+            | ids_list::WHOIS
+    )
 }
 
 mod ids_list {
@@ -321,7 +355,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 74);
+        assert_eq!(registry.tools().len(), 83);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -347,6 +381,12 @@ mod tests {
         assert!(is_batch_tool(ids::XML_TOOL));
         assert!(is_batch_tool(ids::CERT_DECODE));
         assert!(is_batch_tool(ids::BASE64_FILE));
+        assert!(is_batch_tool(ids::BASE64_IMAGE));
+        assert!(is_batch_tool(ids::TAILWIND_COLORS));
+        assert!(is_network_tool(ids::IP_LOCATION));
+        assert!(is_network_tool(ids::WHOIS));
+        assert!(is_network_tool(ids::NETWORK_INFO));
+        assert!(is_network_tool(ids::SPEED_TEST));
         assert!(is_batch_tool(ids::MATH_EVAL));
         assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));

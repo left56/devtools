@@ -17,9 +17,10 @@ use devtools_tools::{
     ascii_drawer,
     base64::{self, Alphabet as B64Alphabet, Base64Mode},
     base64_file::{self, Base64FileMode},
-    base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case, cert_decode,
-    chmod_calc,
-    color_tool, cron_presets, csv_tool,
+    base64_hex,
+    base64_image::{self, Base64ImageMode},
+    basic_auth, bcrypt_tool, binary_tool, bip39_tool, case, cert_decode, chmod_calc,
+    color_palettes, color_tool, cron_presets, csv_tool,
     data_format::{self, FormatKind},
     docker_compose, email_norm,
     encrypt_tool::{self, EncryptMode},
@@ -34,7 +35,10 @@ use devtools_tools::{
     numeronym, obfuscator, otp_tool, password_strength, percentage, phone_tool, quantity, qr_tool,
     random_port, regex_memo, roman, rsa_tool, safelink, slugify,
     sql_format::{self, SqlMode},
+    ruler_tool,
+    svg_edit::{self, SvgMode},
     svg_placeholder,
+    tailwind_colors,
     temperature, text_stats, timestamp, ua_parse,
     unicode_escape::{self, UnicodeMode},
     url_encode::{self, UrlMode},
@@ -70,6 +74,9 @@ pub struct BatchWorkbench {
     hash_encoding: HashEncoding,
     b64_file_mode: Base64FileMode,
     b64_file_mode_manual: bool,
+    b64_image_mode: Base64ImageMode,
+    b64_image_mode_manual: bool,
+    svg_mode: SvgMode,
     /// Separate passphrase for Encrypt (and shown only then).
     password: Entity<TextField>,
     result_scroll: ScrollHandle,
@@ -126,6 +133,9 @@ impl BatchWorkbench {
             hash_encoding: HashEncoding::default_encoding(),
             b64_file_mode: Base64FileMode::default_mode(),
             b64_file_mode_manual: false,
+            b64_image_mode: Base64ImageMode::default_mode(),
+            b64_image_mode_manual: false,
+            svg_mode: SvgMode::default_mode(),
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -172,6 +182,9 @@ impl BatchWorkbench {
             self.hash_encoding = HashEncoding::default_encoding();
             self.b64_file_mode = Base64FileMode::default_mode();
             self.b64_file_mode_manual = false;
+            self.b64_image_mode = Base64ImageMode::default_mode();
+            self.b64_image_mode_manual = false;
+            self.svg_mode = SvgMode::default_mode();
             self.password.update(cx, |field, cx| {
                 field.clear(cx);
                 field.set_placeholder("口令", cx);
@@ -329,6 +342,8 @@ impl BatchWorkbench {
             self.unicode_mode = unicode_escape::suggest_mode(&input);
         } else if self.tool_id == ids::BASE64_FILE && !self.b64_file_mode_manual {
             self.b64_file_mode = base64_file::suggest_mode(&input);
+        } else if self.tool_id == ids::BASE64_IMAGE && !self.b64_image_mode_manual {
+            self.b64_image_mode = base64_image::suggest_mode(&input);
         }
         let password = self.password.read(cx).buffer.text().to_owned();
         match run_batch(
@@ -348,6 +363,8 @@ impl BatchWorkbench {
                 encrypt_mode: self.encrypt_mode,
                 hash_encoding: self.hash_encoding,
                 b64_file_mode: self.b64_file_mode,
+                b64_image_mode: self.b64_image_mode,
+                svg_mode: self.svg_mode,
                 password,
             },
         ) {
@@ -369,7 +386,7 @@ impl BatchWorkbench {
             ids::BASE64 => ("Base64", "编码 / 解码切换 · 像 Base64 时默认解码"),
             ids::URL_ENCODE => ("URL Encode", "编码 / 解码切换 · 含 % 时默认解码"),
             ids::HTML_ESCAPE => ("HTML Escape", "转义 / 反转义切换 · 含实体时默认反转义"),
-            ids::HASH => ("Hash", "MD5/SHA/SHA3/RIPEMD · Hex/Base64/Bin"),
+            ids::HASH => ("Hasher", "MD5/SHA/SHA3/Keccak/RIPEMD · Hex/HEX/Base64/Bin"),
             ids::CASE => ("Case", "snake / camel / Pascal / kebab / CONSTANT / Title"),
             ids::SLUGIFY => ("Slugify", "Slug 与规范化变体"),
             ids::NUMBER_BASE => ("进制转换", "2–36 · 预设含 32/36 · 可用 N#数字"),
@@ -378,7 +395,12 @@ impl BatchWorkbench {
             ids::PERCENTAGE => ("百分比", "输入两个数字，例如 25 200"),
             ids::CHMOD => ("Chmod", "755 ↔ rwxr-xr-x"),
             ids::BINARY => ("文本 / 二进制", "二进制 · 十六进制 · 码点"),
-            ids::COLOR => ("颜色转换", "#hex · rgb · hsl"),
+            ids::COLOR => ("Color Inspector", "#hex · rgb · hsl · hsv · cmyk"),
+            ids::COLOR_PALETTES => ("Color Palettes", "互补 / 类似 / 三元 / 单色阶"),
+            ids::RULER => ("Ruler", "px / rem / pt / cm · 非屏幕叠尺"),
+            ids::SVG_EDIT => ("SVG Editor", "美化 / 压缩 · 可预览"),
+            ids::TAILWIND_COLORS => ("Tailwind Colors", "色板搜索 · 最近色"),
+            ids::BASE64_IMAGE => ("Base64 Image", "路径 ↔ data URL · 离线"),
             ids::BASIC_AUTH => ("Basic Auth", "user:password → Authorization"),
             ids::HMAC => ("HMAC", "第一行密钥，其余为消息"),
             ids::OTP => ("OTP / TOTP", "Base32 密钥 · 可选第二行验证码"),
@@ -570,6 +592,31 @@ impl BatchWorkbench {
                     .text_color(theme.muted)
                     .child("编码=文件路径 · 解码可「路径\\nBase64」写出"),
             );
+        } else if self.tool_id == ids::BASE64_IMAGE {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in Base64ImageMode::ALL {
+                let active = self.b64_image_mode == mode;
+                let id = format!("b64img-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.b64_image_mode = mode;
+                        this.b64_image_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::SVG_EDIT {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in SvgMode::ALL {
+                let active = self.svg_mode == mode;
+                let id = format!("svgedit-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.svg_mode = mode;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
         } else if self.tool_id == ids::DATA_FORMAT {
             row = row.child(div().text_xs().text_color(theme.muted).child("输入"));
             let auto_active = self.data_in.is_none();
@@ -809,6 +856,7 @@ impl BatchWorkbench {
                     | ids::XML_TOOL
                     | ids::MARKDOWN_HTML
                     | ids::UNICODE_ESC
+                    | ids::SVG_EDIT
             )
     }
 
@@ -1054,6 +1102,11 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::XML_TOOL => "<root><item>1</item></root>",
         ids::CERT_DECODE => "-----BEGIN CERTIFICATE----- …",
         ids::BASE64_FILE => "/path/to/file 或 Base64 正文",
+        ids::BASE64_IMAGE => "/path/to/image.png 或 data:image/…;base64,…",
+        ids::COLOR_PALETTES => "#3366cc 或 rgb(51,102,204)",
+        ids::RULER => "16px 或 1.5rem 或 12pt",
+        ids::SVG_EDIT => "<svg>…</svg>",
+        ids::TAILWIND_COLORS => "blue-500 或 #3b82f6 或 blue",
         ids::ENCRYPT => "明文或 Base64 密文",
         _ => "在这里粘贴输入",
     }
@@ -1073,6 +1126,8 @@ struct BatchRunOpts {
     encrypt_mode: EncryptMode,
     hash_encoding: HashEncoding,
     b64_file_mode: Base64FileMode,
+    b64_image_mode: Base64ImageMode,
+    svg_mode: SvgMode,
     password: String,
 }
 
@@ -1095,6 +1150,8 @@ fn run_batch(
         encrypt_mode,
         hash_encoding,
         b64_file_mode,
+        b64_image_mode,
+        svg_mode,
         password,
     } = opts;
     match tool_id {
@@ -1186,6 +1243,11 @@ fn run_batch(
         ids::XML_TOOL => xml_tool::convert_mode(input, xml_mode),
         ids::CERT_DECODE => cert_decode::convert_all(input),
         ids::BASE64_FILE => base64_file::convert_mode(input, b64_file_mode),
+        ids::BASE64_IMAGE => base64_image::convert_mode(input, b64_image_mode),
+        ids::COLOR_PALETTES => color_palettes::convert_all(input),
+        ids::RULER => ruler_tool::convert_all(input),
+        ids::SVG_EDIT => svg_edit::convert_mode(input, svg_mode),
+        ids::TAILWIND_COLORS => tailwind_colors::convert_all(input),
         _ => Err("未知批量工具".into()),
     }
 }

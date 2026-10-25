@@ -85,6 +85,15 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
         ids::XML_TOOL => "<>",
         ids::CERT_DECODE => "CRT",
         ids::BASE64_FILE => "b64",
+        ids::IP_LOCATION => "IP",
+        ids::NETWORK_INFO => "NIC",
+        ids::SPEED_TEST => "⚡",
+        ids::WHOIS => "¿?",
+        ids::BASE64_IMAGE => "🖼",
+        ids::COLOR_PALETTES => "◐",
+        ids::RULER => "↕",
+        ids::SVG_EDIT => "◇",
+        ids::TAILWIND_COLORS => "TW",
         _ => "·",
     }
 }
@@ -100,6 +109,7 @@ pub fn category_tint(category: Category, theme: &Theme) -> Rgba {
             Category::Generators => rgb(0x6fbf8f),
             Category::Web => rgb(0x6b93e8),
             Category::Security => rgb(0xc49090),
+            Category::Graphics => rgb(0xb89ac8),
         }
     } else {
         match category {
@@ -110,6 +120,7 @@ pub fn category_tint(category: Category, theme: &Theme) -> Rgba {
             Category::Generators => rgb(0x157a3c),
             Category::Web => rgb(0x2563eb),
             Category::Security => rgb(0xb42318),
+            Category::Graphics => rgb(0x7c3aed),
         }
     }
 }
