@@ -1,12 +1,15 @@
 use crate::{
     actions::*,
-    json_run::{JsonAction, JsonRun, run_json},
+    json_run::{JsonAction, JsonRun, run_json, run_json_opts},
     text_field::{Edited, TextField},
     theme::Theme,
     tree_state::TreeState,
-    ui::{button, pane, pane_header, pane_title, paste_button, status_chip, workbench_title, StatusKind},
+    ui::{
+        button, chip, pane, pane_header, pane_title, paste_button, status_chip, workbench_title,
+        StatusKind,
+    },
 };
-use devtools_tools::json::{JsonDocument, JsonKind};
+use devtools_tools::json::{FormatOptions, IndentStyle, JsonDocument, JsonKind};
 use gpui::{prelude::FluentBuilder, Timer, *};
 use std::time::Duration;
 
@@ -16,6 +19,7 @@ pub struct JsonWorkbench {
     path: Entity<TextField>,
     jq: Entity<TextField>,
     run: JsonRun,
+    opts: FormatOptions,
     last_input: Option<String>,
     tree: TreeState,
     tree_focus: FocusHandle,
@@ -42,6 +46,7 @@ impl JsonWorkbench {
             path: cx.new(|cx| TextField::new(false, true, "", cx)),
             jq: cx.new(|cx| TextField::new(false, true, "", cx)),
             run: JsonRun::default(),
+            opts: FormatOptions::default_options(),
             last_input: None,
             tree: TreeState::default(),
             tree_focus: cx.focus_handle(),
@@ -109,8 +114,8 @@ impl JsonWorkbench {
             cx.notify();
             return;
         }
-        // Live always prettifies; 压缩 stays an explicit button.
-        self.run = run_json(&input, JsonAction::Prettify);
+        // Live uses current indent / options chips.
+        self.run = run_json_opts(&input, self.opts);
         self.last_input = Some(input);
         let result = self.run.output.as_deref().unwrap_or("");
         self.output
@@ -122,13 +127,13 @@ impl JsonWorkbench {
         }
         self.tree_scroll.set_offset(point(px(0.), px(0.)));
         self.sync_inspector(cx);
-        self.text_view = false;
+        self.text_view = matches!(self.opts.indent, IndentStyle::Minified);
         cx.notify();
     }
 
     fn execute(&mut self, action: JsonAction, window: &mut Window, cx: &mut Context<Self>) {
         let input = self.input.read(cx).buffer.text().to_owned();
-        self.run = run_json(&input, action);
+        self.run = run_json(&input, action, self.opts);
         self.last_input = Some(input);
         let result = self.run.output.as_deref().unwrap_or("");
         self.output
@@ -207,6 +212,76 @@ impl JsonWorkbench {
             cx.notify();
         }
     }
+    fn set_indent(&mut self, indent: IndentStyle, cx: &mut Context<Self>) {
+        self.opts.indent = indent;
+        self.schedule_live_prettify(cx);
+        cx.notify();
+    }
+
+    fn toggle_opt(&mut self, which: &'static str, cx: &mut Context<Self>) {
+        match which {
+            "comments" => self.opts.allow_comments_commas = !self.opts.allow_comments_commas,
+            "repair" => self.opts.auto_repair = !self.opts.auto_repair,
+            "sort" => self.opts.sort_keys = !self.opts.sort_keys,
+            "preserve" => self.opts.preserve_raw = !self.opts.preserve_raw,
+            _ => {}
+        }
+        self.schedule_live_prettify(cx);
+        cx.notify();
+    }
+
+    fn options_bar(&self, cx: &mut Context<Self>) -> Div {
+        let theme = Theme::get(cx);
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(div().text_xs().text_color(theme.muted).child("缩进"));
+        for style in IndentStyle::ALL {
+            let active = self.opts.indent == style;
+            let id = format!("json-indent-{}", style.label());
+            row = row.child(chip(theme, id, style.label(), active).on_click(cx.listener(
+                move |this, _, _, cx| this.set_indent(style, cx),
+            )));
+        }
+        row = row
+            .child(div().text_xs().text_color(theme.muted).child("选项"))
+            .child(chip(
+                theme,
+                "json-opt-comments",
+                "注释/尾逗号",
+                self.opts.allow_comments_commas,
+            )
+            .on_click(cx.listener(|this, _, _, cx| this.toggle_opt("comments", cx))))
+            .child(
+                chip(theme, "json-opt-repair", "自动修复", self.opts.auto_repair).on_click(
+                    cx.listener(|this, _, _, cx| this.toggle_opt("repair", cx)),
+                ),
+            )
+            .child(
+                chip(theme, "json-opt-sort", "排序键", self.opts.sort_keys).on_click(
+                    cx.listener(|this, _, _, cx| this.toggle_opt("sort", cx)),
+                ),
+            )
+            .child(
+                chip(
+                    theme,
+                    "json-opt-preserve",
+                    if self.opts.preserve_active() {
+                        "保留转义"
+                    } else if self.opts.preserve_raw {
+                        "保留转义(需关排序/修复)"
+                    } else {
+                        "保留转义"
+                    },
+                    self.opts.preserve_active(),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_opt("preserve", cx))),
+            );
+        row
+    }
+
     fn tree_view(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = Theme::get(cx);
         let Some(doc) = &self.run.document else {
@@ -517,7 +592,7 @@ impl Render for JsonWorkbench {
                 cx.listener(|this, _, _, _| this.resizing = None),
             )
             .child(
-                workbench_title(theme, "JSON", "离线 · 严格解析 · 保留键顺序")
+                workbench_title(theme, "JSON", "离线 · 可选 JSON5 / 修复 / 排序 · 默认严格")
                     .id("workbench-titlebar")
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, |event, window, _| {
@@ -530,6 +605,7 @@ impl Render for JsonWorkbench {
                         view.child(status_chip(theme, self.notice, StatusKind::Accent))
                     }),
             )
+            .child(self.options_bar(cx))
             .when_some(self.run.error.as_ref(), |view, error| {
                 view.child(crate::ui::banner(theme, StatusKind::Error, error.to_string()))
             })
