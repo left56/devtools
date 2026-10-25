@@ -280,14 +280,16 @@ impl BatchWorkbench {
         match run_batch(
             self.tool_id,
             &input,
-            self.num_from,
-            self.data_in,
-            self.data_out,
-            self.sql_mode,
-            self.url_mode,
-            self.html_mode,
-            self.b64_mode,
-            self.b64_alphabet,
+            BatchRunOpts {
+                num_from: self.num_from,
+                data_in: self.data_in,
+                data_out: self.data_out,
+                sql_mode: self.sql_mode,
+                url_mode: self.url_mode,
+                html_mode: self.html_mode,
+                b64_mode: self.b64_mode,
+                b64_alphabet: self.b64_alphabet,
+            },
         ) {
             Ok(rows) => {
                 self.rows = rows;
@@ -839,9 +841,7 @@ fn placeholder_for(tool_id: &str) -> &'static str {
     }
 }
 
-fn run_batch(
-    tool_id: &str,
-    input: &str,
+struct BatchRunOpts {
     num_from: Base,
     data_in: Option<FormatKind>,
     data_out: FormatKind,
@@ -850,7 +850,23 @@ fn run_batch(
     html_mode: HtmlMode,
     b64_mode: Base64Mode,
     b64_alphabet: B64Alphabet,
+}
+
+fn run_batch(
+    tool_id: &str,
+    input: &str,
+    opts: BatchRunOpts,
 ) -> Result<Vec<(&'static str, String)>, String> {
+    let BatchRunOpts {
+        num_from,
+        data_in,
+        data_out,
+        sql_mode,
+        url_mode,
+        html_mode,
+        b64_mode,
+        b64_alphabet,
+    } = opts;
     match tool_id {
         ids::TIMESTAMP => timestamp::convert_all(input)
             .map(|rows| {
