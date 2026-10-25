@@ -81,6 +81,8 @@ pub mod ids {
     pub const ENCRYPT: &str = "encrypt";
     pub const RSA_KEYGEN: &str = "rsa-keygen";
     pub const BIP39: &str = "bip39";
+    pub const CERT_DECODE: &str = "cert-decode";
+    pub const BASE64_FILE: &str = "base64-file";
 }
 
 /// Whether running the tool contacts the network.

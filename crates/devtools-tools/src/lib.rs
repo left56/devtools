@@ -80,6 +80,8 @@ pub mod bcrypt_tool;
 pub mod encrypt_tool;
 pub mod rsa_tool;
 pub mod bip39_tool;
+pub mod cert_decode;
+pub mod base64_file;
 
 mod suggest;
 
@@ -120,6 +122,7 @@ pub fn catalog() -> Vec<ToolMeta> {
         eta_tool::meta(),
         basic_auth::meta(),
         data_format::meta(),
+        xml_tool::meta(),
         sql_format::meta(),
         ipv4_tool::subnet_meta(),
         ipv4_tool::addr_meta(),
@@ -153,6 +156,8 @@ pub fn catalog() -> Vec<ToolMeta> {
         encrypt_tool::meta(),
         rsa_tool::meta(),
         bip39_tool::meta(),
+        cert_decode::meta(),
+        base64_file::meta(),
         jwt::meta(),
         regex_tool::meta(),
         cron_tool::meta(),
@@ -247,6 +252,9 @@ pub fn is_batch_tool(id: &str) -> bool {
             | ids_list::ENCRYPT
             | ids_list::RSA_KEYGEN
             | ids_list::BIP39
+            | ids_list::XML_TOOL
+            | ids_list::CERT_DECODE
+            | ids_list::BASE64_FILE
     )
 }
 
@@ -313,7 +321,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 71);
+        assert_eq!(registry.tools().len(), 74);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -336,7 +344,9 @@ mod tests {
         assert!(is_batch_generate_tool(ids::MAC_GEN));
         assert!(is_batch_tool(ids::QR_CODE));
         assert!(is_batch_tool(ids::DATA_FORMAT));
-        assert!(!is_batch_tool(ids::XML_TOOL));
+        assert!(is_batch_tool(ids::XML_TOOL));
+        assert!(is_batch_tool(ids::CERT_DECODE));
+        assert!(is_batch_tool(ids::BASE64_FILE));
         assert!(is_batch_tool(ids::MATH_EVAL));
         assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));

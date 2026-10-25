@@ -12,41 +12,79 @@ pub fn meta() -> ToolMeta {
         id: ids::XML_TOOL,
         name: "XML / JSON",
         category: Category::Data,
-        summary: "XML 美化/压缩，并与 JSON 互转（元素→对象，重复标签→数组）。",
-        keywords: &["xml", "json", "format", "美化"],
+        summary: "XML 美化/压缩，或与 JSON 互转。模式切换，默认美化。",
+        keywords: &["xml", "json", "format", "美化", "压缩"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
 }
 
-pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum XmlMode {
+    Beautify,
+    Minify,
+    Json,
+}
+
+impl XmlMode {
+    pub const ALL: [XmlMode; 3] = [XmlMode::Beautify, XmlMode::Minify, XmlMode::Json];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Beautify => "美化",
+            Self::Minify => "压缩",
+            Self::Json => "↔ JSON",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Beautify
+    }
+}
+
+pub fn convert_mode(input: &str, mode: XmlMode) -> Result<Vec<(&'static str, String)>, String> {
     let t = input.trim();
     if t.is_empty() {
         return Err("输入为空".into());
     }
-    if t.starts_with('{') || t.starts_with('[') {
-        let v: Value = serde_json::from_str(t).map_err(|e| format!("JSON 解析失败：{e}"))?;
-        let xml = json_to_xml(&v)?;
-        return Ok(vec![
-            ("XML 美化", prettify_xml(&xml)?),
-            ("XML 压缩", minify_xml(&xml)?),
-            (
-                "JSON（原文）",
-                serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
-            ),
-        ]);
+    let is_json = t.starts_with('{') || t.starts_with('[');
+    match mode {
+        XmlMode::Beautify => {
+            let xml = if is_json {
+                let v: Value = serde_json::from_str(t).map_err(|e| format!("JSON 解析失败：{e}"))?;
+                json_to_xml(&v)?
+            } else {
+                t.to_string()
+            };
+            Ok(vec![("美化", prettify_xml(&xml)?)])
+        }
+        XmlMode::Minify => {
+            let xml = if is_json {
+                let v: Value = serde_json::from_str(t).map_err(|e| format!("JSON 解析失败：{e}"))?;
+                json_to_xml(&v)?
+            } else {
+                t.to_string()
+            };
+            Ok(vec![("压缩", minify_xml(&xml)?)])
+        }
+        XmlMode::Json => {
+            if is_json {
+                let v: Value = serde_json::from_str(t).map_err(|e| format!("JSON 解析失败：{e}"))?;
+                let xml = json_to_xml(&v)?;
+                Ok(vec![("XML", prettify_xml(&xml)?)])
+            } else {
+                let json = xml_to_json(t)?;
+                Ok(vec![(
+                    "JSON",
+                    serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
+                )])
+            }
+        }
     }
-    let pretty = prettify_xml(t)?;
-    let mini = minify_xml(t)?;
-    let json = xml_to_json(t)?;
-    Ok(vec![
-        ("XML 美化", pretty),
-        ("XML 压缩", mini),
-        (
-            "JSON",
-            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
-        ),
-    ])
+}
+
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+    convert_mode(input, XmlMode::default_mode())
 }
 
 fn rewrite(xml: &str, indent: bool) -> Result<String, String> {
@@ -236,12 +274,16 @@ mod tests {
     use super::*;
     #[test]
     fn xml_to_json_dup_tags() {
-        let rows = convert_all("<a><b>1</b><b>2</b></a>").unwrap();
-        assert!(rows[2].1.contains('['));
+        let pretty = convert_mode("<a><b>1</b><b>2</b></a>", XmlMode::Beautify).unwrap();
+        assert_eq!(pretty[0].0, "美化");
+        let rows = convert_mode("<a><b>1</b><b>2</b></a>", XmlMode::Json).unwrap();
+        assert_eq!(rows[0].0, "JSON");
+        assert!(rows[0].1.contains('['));
     }
     #[test]
-    fn json_input() {
-        let rows = convert_all(r#"{"note":{"to":"Tove"}}"#).unwrap();
+    fn json_input_to_xml() {
+        let rows = convert_mode(r#"{"note":{"to":"Tove"}}"#, XmlMode::Json).unwrap();
+        assert_eq!(rows[0].0, "XML");
         assert!(rows[0].1.contains("note"));
     }
 }

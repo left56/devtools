@@ -12,6 +12,8 @@ serde_json = { workspace = true }
 md-5 = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
+sha3 = { workspace = true }
+ripemd = { workspace = true }
 hmac = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
@@ -33,6 +35,7 @@ bcrypt = { workspace = true }
 aes-gcm = { workspace = true }
 rsa = { workspace = true }
 bip39 = { workspace = true }
+x509-parser = { workspace = true }
 rand = { workspace = true }
 
 [lints]

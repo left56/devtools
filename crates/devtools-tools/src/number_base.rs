@@ -1,4 +1,4 @@
-//! Integer conversion among bases 2, 8, 10, and 16.
+//! Integer conversion among bases 2–36 (UI presets 2/8/10/16/32/36).
 //! Illegal digits report a 0-based character index into the trimmed input.
 
 use std::fmt;
@@ -13,7 +13,17 @@ impl Base {
     pub const OCT: Self = Self(8);
     pub const DEC: Self = Self(10);
     pub const HEX: Self = Self(16);
-    pub const ALL: [Self; 4] = [Self::BIN, Self::OCT, Self::DEC, Self::HEX];
+    pub const B32: Self = Self(32);
+    pub const B36: Self = Self(36);
+    /// Preset chips shown in the shell.
+    pub const ALL: [Self; 6] = [
+        Self::BIN,
+        Self::OCT,
+        Self::DEC,
+        Self::HEX,
+        Self::B32,
+        Self::B36,
+    ];
 
     pub fn radix(self) -> u32 {
         self.0
@@ -25,14 +35,24 @@ impl Base {
             8 => "8",
             10 => "10",
             16 => "16",
-            _ => unreachable!("only 2/8/10/16 are constructed"),
+            32 => "32",
+            36 => "36",
+            n if (2..=36).contains(&n) => LABELS[(n - 2) as usize],
+            _ => "?",
         }
     }
 
     pub fn from_radix(radix: u32) -> Option<Self> {
-        matches!(radix, 2 | 8 | 10 | 16).then_some(Self(radix))
+        (2..=36).contains(&radix).then_some(Self(radix))
     }
 }
+
+/// Static labels "2"…"36" for custom radix display.
+const LABELS: [&str; 35] = [
+    "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
+    "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34",
+    "35", "36",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberBaseError {
@@ -57,8 +77,8 @@ pub fn meta() -> ToolMeta {
         id: ids::NUMBER_BASE,
         name: "Number Base",
         category: Category::Data,
-        summary: "在 2/8/10/16 进制之间转换。非法数字会指出字符位置。",
-        keywords: &["binary", "hex", "octal", "进制", "二进制", "十六进制"],
+        summary: "在 2–36 进制之间转换（预设 2/8/10/16/32/36；也可用 N#数字）。非法数字会指出字符位置。",
+        keywords: &["binary", "hex", "octal", "进制", "二进制", "十六进制", "base32", "base36"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -95,7 +115,10 @@ pub fn convert(input: &str, from: Base, to: Base) -> Result<String, NumberBaseEr
         }
         let Some(digit) = ch.to_digit(from.radix()) else {
             return Err(NumberBaseError {
-                message: format!("`{ch}` 不是 {from_label} 进制合法数字", from_label = from.label()),
+                message: format!(
+                    "`{ch}` 不是 {from_label} 进制合法数字",
+                    from_label = from.label()
+                ),
                 char_index: Some(digit_index),
             });
         };
@@ -136,52 +159,21 @@ fn to_radix(mut value: u128, base: Base) -> String {
     chars.into_iter().rev().collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_is_rejected() {
-        assert!(convert("", Base::DEC, Base::HEX).is_err());
-    }
-
-    #[test]
-    fn typical_conversions() {
-        assert_eq!(convert("255", Base::DEC, Base::HEX).unwrap(), "ff");
-        assert_eq!(convert("ff", Base::HEX, Base::DEC).unwrap(), "255");
-        assert_eq!(convert("11111111", Base::BIN, Base::DEC).unwrap(), "255");
-        assert_eq!(convert("377", Base::OCT, Base::DEC).unwrap(), "255");
-    }
-
-    #[test]
-    fn round_trip_and_separators() {
-        let value = convert("1_000", Base::DEC, Base::BIN).unwrap();
-        assert_eq!(convert(&value, Base::BIN, Base::DEC).unwrap(), "1000");
-        assert_eq!(convert("-10", Base::DEC, Base::HEX).unwrap(), "-a");
-    }
-
-    #[test]
-    fn illegal_digit_reports_char_index() {
-        let error = convert("12A", Base::DEC, Base::HEX).unwrap_err();
-        assert_eq!(error.char_index, Some(2));
-        assert!(error.message.contains('A'));
-    }
-}
-
-/// Convert from an auto-detected or explicit base into all common bases at once.
-pub fn convert_all(input: &str, from: Base) -> Result<Vec<( &'static str, String)>, NumberBaseError> {
+/// Convert from an explicit base into preset bases at once.
+pub fn convert_all(input: &str, from: Base) -> Result<Vec<(&'static str, String)>, NumberBaseError> {
     let trimmed = input.trim();
-    // Parse once via convert to DEC, then fan out.
     let dec = convert(trimmed, from, Base::DEC)?;
     Ok(vec![
         ("二进制 (2)", convert(&dec, Base::DEC, Base::BIN)?),
         ("八进制 (8)", convert(&dec, Base::DEC, Base::OCT)?),
         ("十进制 (10)", dec.clone()),
         ("十六进制 (16)", convert(&dec, Base::DEC, Base::HEX)?),
+        ("三十二进制 (32)", convert(&dec, Base::DEC, Base::B32)?),
+        ("三十六进制 (36)", convert(&dec, Base::DEC, Base::B36)?),
     ])
 }
 
-/// Guess base from prefix (`0x`/`0b`/`0o`) or default to decimal.
+/// Guess base from prefix (`0x`/`0b`/`0o`) or `N#` custom, else default to decimal.
 pub fn detect_base(input: &str) -> Base {
     let t = input.trim().trim_start_matches(['+', '-']).trim();
     let lower = t.to_ascii_lowercase();
@@ -191,12 +183,44 @@ pub fn detect_base(input: &str) -> Base {
         Base::BIN
     } else if lower.starts_with("0o") {
         Base::OCT
+    } else if let Some(base) = parse_custom_prefix(t).map(|(b, _)| b) {
+        base
     } else {
         Base::DEC
     }
 }
 
+/// `N#digits` or `N:digits` where N is 2..=36.
+pub fn parse_custom_prefix(input: &str) -> Option<(Base, String)> {
+    let t = input.trim();
+    let (neg, rest) = match t.as_bytes().first() {
+        Some(b'-') => (true, &t[1..]),
+        Some(b'+') => (false, &t[1..]),
+        _ => (false, t),
+    };
+    let rest = rest.trim();
+    let sep = rest.find(['#', ':'])?;
+    if sep == 0 {
+        return None;
+    }
+    let radix: u32 = rest[..sep].parse().ok()?;
+    let base = Base::from_radix(radix)?;
+    let body = rest[sep + 1..].trim();
+    if body.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    if neg {
+        out.push('-');
+    }
+    out.push_str(body);
+    Some((base, out))
+}
+
 pub fn normalize_input(input: &str) -> (Base, String) {
+    if let Some((base, body)) = parse_custom_prefix(input) {
+        return (base, body);
+    }
     let base = detect_base(input);
     let t = input.trim();
     let (negative, rest) = match t.as_bytes().first() {
@@ -220,6 +244,47 @@ pub fn normalize_input(input: &str) -> (Base, String) {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_is_rejected() {
+        assert!(convert("", Base::DEC, Base::HEX).is_err());
+    }
+
+    #[test]
+    fn typical_conversions() {
+        assert_eq!(convert("255", Base::DEC, Base::HEX).unwrap(), "ff");
+        assert_eq!(convert("ff", Base::HEX, Base::DEC).unwrap(), "255");
+        assert_eq!(convert("11111111", Base::BIN, Base::DEC).unwrap(), "255");
+        assert_eq!(convert("377", Base::OCT, Base::DEC).unwrap(), "255");
+        assert_eq!(convert("7v", Base::B36, Base::DEC).unwrap(), "283");
+    }
+
+    #[test]
+    fn round_trip_and_separators() {
+        let value = convert("1_000", Base::DEC, Base::BIN).unwrap();
+        assert_eq!(convert(&value, Base::BIN, Base::DEC).unwrap(), "1000");
+        assert_eq!(convert("-10", Base::DEC, Base::HEX).unwrap(), "-a");
+    }
+
+    #[test]
+    fn illegal_digit_reports_char_index() {
+        let error = convert("12A", Base::DEC, Base::HEX).unwrap_err();
+        assert_eq!(error.char_index, Some(2));
+        assert!(error.message.contains('A'));
+    }
+
+    #[test]
+    fn custom_prefix() {
+        let (b, n) = parse_custom_prefix("36#zz").unwrap();
+        assert_eq!(b, Base::B36);
+        assert_eq!(n, "zz");
+        assert_eq!(convert(&n, b, Base::DEC).unwrap(), "1295");
+    }
+}
+
+#[cfg(test)]
 mod convert_all_tests {
     use super::*;
 
@@ -229,6 +294,7 @@ mod convert_all_tests {
         assert_eq!(rows[2].1, "255");
         assert_eq!(rows[3].1, "ff");
         assert_eq!(rows[0].1, "11111111");
+        assert_eq!(rows[5].1, "73");
     }
 
     #[test]
@@ -240,5 +306,8 @@ mod convert_all_tests {
         assert_eq!(n, "FF");
         let rows = convert_all(&n, b).unwrap();
         assert_eq!(rows[2].1, "255");
+        let (b, n) = normalize_input("36#zz");
+        assert_eq!(b.radix(), 36);
+        assert_eq!(n, "zz");
     }
 }

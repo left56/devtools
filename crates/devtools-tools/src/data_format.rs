@@ -178,7 +178,7 @@ fn json_to_toml_value(v: &serde_json::Value) -> Result<toml::Value, String> {
 /// Remap retired sidebar twins onto the unified tool.
 pub fn remap_legacy_id(id: &str) -> &str {
     match id {
-        ids::JSON_YAML | ids::JSON_TOML | ids::YAML_TOML | ids::XML_TOOL => ids::DATA_FORMAT,
+        ids::JSON_YAML | ids::JSON_TOML | ids::YAML_TOML => ids::DATA_FORMAT,
         other => other,
     }
 }
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn remap_legacy() {
         assert_eq!(remap_legacy_id(ids::JSON_YAML), ids::DATA_FORMAT);
-        assert_eq!(remap_legacy_id(ids::XML_TOOL), ids::DATA_FORMAT);
+        assert_eq!(remap_legacy_id(ids::XML_TOOL), ids::XML_TOOL);
         assert_eq!(remap_legacy_id(ids::JSON), ids::JSON);
     }
 }

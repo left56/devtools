@@ -221,6 +221,7 @@ mod tests {
         let raw = r#"{"favorites":["json-yaml","xml-tool"],"recents":[{"id":"json-toml","used_at":1},{"id":"yaml-toml","used_at":2}]}"#;
         let prefs = Prefs::from_json(raw).unwrap();
         assert!(prefs.is_favorite("data-format"));
+        assert!(prefs.is_favorite("xml-tool"));
         assert!(!prefs.is_favorite("json-yaml"));
         assert_eq!(prefs.recent_ids(), vec!["data-format"]);
     }

@@ -7,26 +7,64 @@ pub fn meta() -> ToolMeta {
         id: ids::UNICODE_ESC,
         name: "Unicode escape",
         category: Category::Encoding,
-        summary: "文本与 \\uXXXX / U+XXXX 互转；补充「文本二进制」码点视图。",
+        summary: "文本与 \\uXXXX / U+XXXX 互转。模式：转义 | 反转义。",
         keywords: &["unicode", "escape", "\\u", "码点"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
 }
 
-pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnicodeMode {
+    Escape,
+    Unescape,
+}
+
+impl UnicodeMode {
+    pub const ALL: [UnicodeMode; 2] = [UnicodeMode::Escape, UnicodeMode::Unescape];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Escape => "转义",
+            Self::Unescape => "反转义",
+        }
+    }
+
+    pub fn default_mode() -> Self {
+        Self::Escape
+    }
+}
+
+/// Prefer unescape when input looks like escapes.
+pub fn suggest_mode(input: &str) -> UnicodeMode {
+    if looks_like_escapes(input.trim()) {
+        UnicodeMode::Unescape
+    } else {
+        UnicodeMode::Escape
+    }
+}
+
+pub fn convert_mode(input: &str, mode: UnicodeMode) -> Result<Vec<(&'static str, String)>, String> {
     let t = input.trim();
     if t.is_empty() {
         return Err("输入为空".into());
     }
-    if looks_like_escapes(t) {
-        let text = decode_escapes(t)?;
-        return Ok(outputs(&text));
+    match mode {
+        UnicodeMode::Escape => Ok(escape_rows(t)),
+        UnicodeMode::Unescape => {
+            let text = decode_escapes(t)?;
+            Ok(vec![("文本", text)])
+        }
     }
-    Ok(outputs(t))
 }
 
-fn outputs(text: &str) -> Vec<(&'static str, String)> {
+pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
+
+    convert_mode(input, suggest_mode(input))
+}
+
+fn escape_rows(text: &str) -> Vec<(&'static str, String)> {
     let js: String = text
         .chars()
         .map(|c| {
@@ -122,12 +160,14 @@ mod tests {
     use super::*;
     #[test]
     fn encode_chinese() {
-        let rows = convert_all("你").unwrap();
-        assert!(rows[1].1.contains("\\u"));
+        let rows = convert_mode("你", UnicodeMode::Escape).unwrap();
+        assert!(rows.iter().any(|r| r.1.contains("4F60") || r.1.contains("4f60")));
+        assert_eq!(suggest_mode("你"), UnicodeMode::Escape);
     }
     #[test]
     fn decode_js() {
-        let rows = convert_all("\\u4F60").unwrap();
+        let rows = convert_mode("\\u4F60", UnicodeMode::Unescape).unwrap();
         assert_eq!(rows[0].1, "你");
+        assert_eq!(suggest_mode("\\u4F60"), UnicodeMode::Unescape);
     }
 }

@@ -15,12 +15,16 @@ use devtools_core::ids;
 use devtools_tools::{
     ascii_drawer,
     base64::{self, Alphabet as B64Alphabet, Base64Mode},
-    base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case,
+    base64_file::{self, Base64FileMode},
+    base64_hex, basic_auth, bcrypt_tool, binary_tool, bip39_tool, case, cert_decode,
     chmod_calc,
     color_tool, cron_presets, csv_tool,
     data_format::{self, FormatKind},
-    docker_compose, email_norm, encrypt_tool,
-    eta_tool, git_memo, hash, hmac_tool,
+    docker_compose, email_norm,
+    encrypt_tool::{self, EncryptMode},
+    eta_tool, git_memo,
+    hash::{self, HashEncoding},
+    hmac_tool,
     html_escape::{self, HtmlMode},
     http_status, iban_tool, ipv4_tool, ipv6_ula, json_diff_tool,
     keycode_info, list_conv, mac_gen, markdown_html, math_eval, meta_tags, mime_tool, nato_alpha,
@@ -30,9 +34,11 @@ use devtools_tools::{
     random_port, regex_memo, roman, rsa_tool, safelink, slugify,
     sql_format::{self, SqlMode},
     svg_placeholder,
-    temperature, text_stats, timestamp, ua_parse, unicode_escape,
+    temperature, text_stats, timestamp, ua_parse,
+    unicode_escape::{self, UnicodeMode},
     url_encode::{self, UrlMode},
     wifi_qr,
+    xml_tool::{self, XmlMode},
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -56,12 +62,22 @@ pub struct BatchWorkbench {
     b64_mode: Base64Mode,
     b64_mode_manual: bool,
     b64_alphabet: B64Alphabet,
+    xml_mode: XmlMode,
+    unicode_mode: UnicodeMode,
+    unicode_mode_manual: bool,
+    encrypt_mode: EncryptMode,
+    hash_encoding: HashEncoding,
+    b64_file_mode: Base64FileMode,
+    b64_file_mode_manual: bool,
+    /// Separate passphrase for Encrypt (and shown only then).
+    password: Entity<TextField>,
     result_scroll: ScrollHandle,
 }
 
 impl BatchWorkbench {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| TextField::new(false, false, "在这里粘贴输入", cx));
+        let password = cx.new(|cx| TextField::new(false, false, "口令", cx));
         cx.subscribe(&input, |this, _, _: &Edited, cx| {
             this.notice = "";
             if this.tool_id == ids::BIP39 {
@@ -73,9 +89,19 @@ impl BatchWorkbench {
             }
         })
         .detach();
+        cx.subscribe(&password, |this, _, _: &Edited, cx| {
+            this.notice = "";
+            if this.tool_id == ids::ENCRYPT {
+                this.live_refresh(cx);
+            } else {
+                cx.notify();
+            }
+        })
+        .detach();
         Self {
             tool_id: ids::TIMESTAMP,
             input,
+            password,
             rows: Vec::new(),
             error: None,
             notice: "",
@@ -92,6 +118,13 @@ impl BatchWorkbench {
             b64_mode: Base64Mode::default_mode(),
             b64_mode_manual: false,
             b64_alphabet: B64Alphabet::Standard,
+            xml_mode: XmlMode::default_mode(),
+            unicode_mode: UnicodeMode::default_mode(),
+            unicode_mode_manual: false,
+            encrypt_mode: EncryptMode::default_mode(),
+            hash_encoding: HashEncoding::default_encoding(),
+            b64_file_mode: Base64FileMode::default_mode(),
+            b64_file_mode_manual: false,
             result_scroll: ScrollHandle::new(),
         }
     }
@@ -131,6 +164,18 @@ impl BatchWorkbench {
             self.b64_mode = Base64Mode::default_mode();
             self.b64_mode_manual = false;
             self.b64_alphabet = B64Alphabet::Standard;
+            self.xml_mode = XmlMode::default_mode();
+            self.unicode_mode = UnicodeMode::default_mode();
+            self.unicode_mode_manual = false;
+            self.encrypt_mode = EncryptMode::default_mode();
+            self.hash_encoding = HashEncoding::default_encoding();
+            self.b64_file_mode = Base64FileMode::default_mode();
+            self.b64_file_mode_manual = false;
+            self.password.update(cx, |field, cx| {
+                field.clear(cx);
+                field.set_placeholder("口令", cx);
+                field.set_multiline(false, cx);
+            });
             self.input.update(cx, |field, cx| {
                 field.set_placeholder(placeholder_for(tool_id), cx);
                 field.set_multiline(
@@ -198,6 +243,9 @@ impl BatchWorkbench {
                 field.clear(cx);
                 field.focus(window);
             });
+            if self.tool_id == ids::ENCRYPT {
+                self.password.update(cx, |field, cx| field.clear(cx));
+            }
         }
         self.notice = "";
         self.live_refresh(cx);
@@ -276,7 +324,12 @@ impl BatchWorkbench {
             self.html_mode = html_escape::suggest_mode(&input);
         } else if self.tool_id == ids::BASE64 && !self.b64_mode_manual {
             self.b64_mode = base64::suggest_mode(&input);
+        } else if self.tool_id == ids::UNICODE_ESC && !self.unicode_mode_manual {
+            self.unicode_mode = unicode_escape::suggest_mode(&input);
+        } else if self.tool_id == ids::BASE64_FILE && !self.b64_file_mode_manual {
+            self.b64_file_mode = base64_file::suggest_mode(&input);
         }
+        let password = self.password.read(cx).buffer.text().to_owned();
         match run_batch(
             self.tool_id,
             &input,
@@ -289,6 +342,12 @@ impl BatchWorkbench {
                 html_mode: self.html_mode,
                 b64_mode: self.b64_mode,
                 b64_alphabet: self.b64_alphabet,
+                xml_mode: self.xml_mode,
+                unicode_mode: self.unicode_mode,
+                encrypt_mode: self.encrypt_mode,
+                hash_encoding: self.hash_encoding,
+                b64_file_mode: self.b64_file_mode,
+                password,
             },
         ) {
             Ok(rows) => {
@@ -309,10 +368,10 @@ impl BatchWorkbench {
             ids::BASE64 => ("Base64", "编码 / 解码切换 · 像 Base64 时默认解码"),
             ids::URL_ENCODE => ("URL Encode", "编码 / 解码切换 · 含 % 时默认解码"),
             ids::HTML_ESCAPE => ("HTML Escape", "转义 / 反转义切换 · 含实体时默认反转义"),
-            ids::HASH => ("Hash", "MD5/SHA 全家桶 · 弱算法已标注"),
+            ids::HASH => ("Hash", "MD5/SHA/SHA3/RIPEMD · Hex/Base64/Bin"),
             ids::CASE => ("Case", "snake / camel / Pascal / kebab / CONSTANT / Title"),
             ids::SLUGIFY => ("Slugify", "Slug 与规范化变体"),
-            ids::NUMBER_BASE => ("进制转换", "同时显示 2/8/10/16 · 可识别 0x/0b/0o"),
+            ids::NUMBER_BASE => ("进制转换", "2–36 · 预设含 32/36 · 可用 N#数字"),
             ids::TEXT_STATS => ("文本统计", "字符 · 词 · 行 · 字节"),
             ids::ROMAN => ("罗马数字", "1–3999 · 自动识别方向"),
             ids::PERCENTAGE => ("百分比", "输入两个数字，例如 25 200"),
@@ -350,7 +409,7 @@ impl BatchWorkbench {
             ids::PHONE => ("电话整理", "E.164 猜测"),
             ids::ASCII_DRAW => ("ASCII 横幅", "极简字模"),
             ids::RANDOM_PORT => ("随机端口", "点击生成 · 可设数量"),
-            ids::UNICODE_ESC => ("Unicode 转义", "\\u / U+"),
+            ids::UNICODE_ESC => ("Unicode 转义", "转义 / 反转义切换"),
             ids::QR_CODE => ("QR 码", "SVG · ASCII"),
             ids::WIFI_QR => ("Wi‑Fi QR", "SSID / 加密 / 密码"),
             ids::META_TAGS => ("Meta 标签", "OG / Twitter"),
@@ -361,9 +420,12 @@ impl BatchWorkbench {
             ids::REGEX_MEMO => ("正则速查", "与测试工具分开"),
             ids::BASE64_HEX => ("Base64 ↔ Hex", "粘贴载荷"),
             ids::BCRYPT => ("bcrypt", "哈希 / 校验"),
-            ids::ENCRYPT => ("AES 加解密", "口令派生 · 学习用"),
+            ids::ENCRYPT => ("AES 加解密", "加密 / 解密 · 独立口令 · 学习用"),
             ids::RSA_KEYGEN => ("RSA 密钥", "点击生成 PEM · 数量≤5"),
             ids::BIP39 => ("BIP39", "生成助记词 · 可粘贴校验 · 非钱包"),
+            ids::XML_TOOL => ("XML", "美化 / 压缩 / ↔ JSON"),
+            ids::CERT_DECODE => ("证书解码", "PEM / X.509 · 不校验证书链"),
+            ids::BASE64_FILE => ("Base64 文件", "路径 ↔ Base64 · 粘贴路径"),
             _ => ("工具", "离线"),
         }
     }
@@ -435,6 +497,80 @@ impl BatchWorkbench {
                     },
                 )));
             }
+        } else if self.tool_id == ids::XML_TOOL {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in XmlMode::ALL {
+                let active = self.xml_mode == mode;
+                let id = format!("xml-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.xml_mode = mode;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::UNICODE_ESC {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in UnicodeMode::ALL {
+                let active = self.unicode_mode == mode;
+                let id = format!("uni-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.unicode_mode = mode;
+                        this.unicode_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::ENCRYPT {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in EncryptMode::ALL {
+                let active = self.encrypt_mode == mode;
+                let id = format!("enc-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.encrypt_mode = mode;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child("口令在下方独立栏 · 仅供学习"),
+            );
+        } else if self.tool_id == ids::HASH {
+            row = row.child(div().text_xs().text_color(theme.muted).child("编码"));
+            for enc in HashEncoding::ALL {
+                let active = self.hash_encoding == enc;
+                let id = format!("hash-enc-{}", enc.label());
+                row = row.child(chip(theme, id, enc.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.hash_encoding = enc;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+        } else if self.tool_id == ids::BASE64_FILE {
+            row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
+            for mode in Base64FileMode::ALL {
+                let active = self.b64_file_mode == mode;
+                let id = format!("b64file-mode-{}", mode.label());
+                row = row.child(chip(theme, id, mode.label(), active).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.b64_file_mode = mode;
+                        this.b64_file_mode_manual = true;
+                        this.live_refresh(cx);
+                    },
+                )));
+            }
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child("编码=文件路径 · 解码可「路径\\nBase64」写出"),
+            );
         } else if self.tool_id == ids::DATA_FORMAT {
             row = row.child(div().text_xs().text_color(theme.muted).child("输入"));
             let auto_active = self.data_in.is_none();
@@ -492,7 +628,7 @@ impl BatchWorkbench {
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("也可在输入里写 0x / 0b / 0o"),
+                    .child("也可 0x/0b/0o 或 N#数字（2–36）"),
             );
         } else if self.tool_id == ids::BIP39 {
             row = row.child(div().text_xs().text_color(theme.muted).child("词数"));
@@ -837,6 +973,10 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::NATO => "SOS",
         ids::SAFELINK => "Outlook SafeLinks URL",
         ids::DOCKER_RUN => "docker run -d --name web -p 80:80 nginx",
+        ids::XML_TOOL => "<root><item>1</item></root>",
+        ids::CERT_DECODE => "-----BEGIN CERTIFICATE----- …",
+        ids::BASE64_FILE => "/path/to/file 或 Base64 正文",
+        ids::ENCRYPT => "明文或 Base64 密文",
         _ => "在这里粘贴输入",
     }
 }
@@ -850,6 +990,12 @@ struct BatchRunOpts {
     html_mode: HtmlMode,
     b64_mode: Base64Mode,
     b64_alphabet: B64Alphabet,
+    xml_mode: XmlMode,
+    unicode_mode: UnicodeMode,
+    encrypt_mode: EncryptMode,
+    hash_encoding: HashEncoding,
+    b64_file_mode: Base64FileMode,
+    password: String,
 }
 
 fn run_batch(
@@ -866,6 +1012,12 @@ fn run_batch(
         html_mode,
         b64_mode,
         b64_alphabet,
+        xml_mode,
+        unicode_mode,
+        encrypt_mode,
+        hash_encoding,
+        b64_file_mode,
+        password,
     } = opts;
     match tool_id {
         ids::TIMESTAMP => timestamp::convert_all(input)
@@ -878,18 +1030,19 @@ fn run_batch(
         ids::BASE64 => base64::convert_mode(input, b64_mode, b64_alphabet),
         ids::URL_ENCODE => url_encode::convert_mode(input, url_mode),
         ids::HTML_ESCAPE => html_escape::convert_mode(input, html_mode),
-        ids::HASH => hash::convert_all(input),
+        ids::HASH => hash::convert_with_encoding(input, hash_encoding),
         ids::CASE => case::convert_all(input),
         ids::SLUGIFY => slugify::convert_all(input),
         ids::NUMBER_BASE => {
             let (detected, normalized) = number_base::normalize_input(input);
-            // Prefer explicit chip when input has no prefix.
-            let from = if input.trim().to_ascii_lowercase().starts_with("0x")
-                || input.trim().to_ascii_lowercase().starts_with("0b")
-                || input.trim().to_ascii_lowercase().starts_with("0o")
-                || input.trim().to_ascii_lowercase().starts_with("-0x")
-                || input.trim().to_ascii_lowercase().starts_with("-0b")
-                || input.trim().to_ascii_lowercase().starts_with("-0o")
+            let lower = input.trim().to_ascii_lowercase();
+            let from = if number_base::parse_custom_prefix(input).is_some()
+                || lower.starts_with("0x")
+                || lower.starts_with("0b")
+                || lower.starts_with("0o")
+                || lower.starts_with("-0x")
+                || lower.starts_with("-0b")
+                || lower.starts_with("-0o")
             {
                 detected
             } else {
@@ -931,7 +1084,7 @@ fn run_batch(
         ids::KEYCODE => keycode_info::convert_all(input),
         ids::PHONE => phone_tool::convert_all(input),
         ids::ASCII_DRAW => ascii_drawer::convert_all(input),
-        ids::UNICODE_ESC => unicode_escape::convert_all(input),
+        ids::UNICODE_ESC => unicode_escape::convert_mode(input, unicode_mode),
         ids::QR_CODE => qr_tool::convert_all(input),
         ids::WIFI_QR => wifi_qr::convert_all(input),
         ids::META_TAGS => meta_tags::convert_all(input),
@@ -942,8 +1095,19 @@ fn run_batch(
         ids::REGEX_MEMO => regex_memo::convert_all(input),
         ids::BASE64_HEX => base64_hex::convert_all(input),
         ids::BCRYPT => bcrypt_tool::convert_all(input),
-        ids::ENCRYPT => encrypt_tool::convert_all(input),
+        ids::ENCRYPT => {
+            let pass = if password.trim().is_empty() {
+                // fall back to legacy two-line input
+                return encrypt_tool::convert_all(input);
+            } else {
+                password.as_str()
+            };
+            encrypt_tool::convert_mode(input, pass, encrypt_mode)
+        }
         ids::BIP39 => bip39_tool::convert_all(input),
+        ids::XML_TOOL => xml_tool::convert_mode(input, xml_mode),
+        ids::CERT_DECODE => cert_decode::convert_all(input),
+        ids::BASE64_FILE => base64_file::convert_mode(input, b64_file_mode),
         _ => Err("未知批量工具".into()),
     }
 }
@@ -970,7 +1134,11 @@ fn input_pane_title(tool_id: &str) -> &'static str {
         ids::SVG_PLACEHOLDER => "尺寸",
         ids::BASIC_AUTH => "账号",
         ids::OTP => "密钥",
-        ids::BCRYPT | ids::ENCRYPT => "口令",
+        ids::BCRYPT => "口令",
+        ids::ENCRYPT => "正文",
+        ids::CERT_DECODE => "PEM",
+        ids::BASE64_FILE => "路径 / Base64",
+        ids::XML_TOOL => "XML / JSON",
         ids::BIP39 => "助记词",
         ids::HMAC => "密钥 + 消息",
         _ => "输入",
@@ -1114,6 +1282,59 @@ impl Render for BatchWorkbench {
                                         pane(theme)
                                             .w(relative(0.38))
                                             .flex_shrink_0()
+                                            .when(self.tool_id == ids::ENCRYPT, |p| {
+                                                p.child(
+                                                    pane_header(theme)
+                                                        .child(pane_title(theme, "口令"))
+                                                        .child(
+                                                            paste_button(theme, "batch-pass-paste")
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    cx.listener(
+                                                                        |this,
+                                                                         _: &MouseDownEvent,
+                                                                         window,
+                                                                         cx| {
+                                                                            cx.stop_propagation();
+                                                                            let text = cx
+                                                                                .read_from_clipboard()
+                                                                                .and_then(|item| {
+                                                                                    item.text()
+                                                                                })
+                                                                                .unwrap_or_default();
+                                                                            this.password.update(
+                                                                                cx,
+                                                                                |field, cx| {
+                                                                                    field.set_input(
+                                                                                        &text, cx,
+                                                                                    );
+                                                                                    field.focus(
+                                                                                        window,
+                                                                                    );
+                                                                                },
+                                                                            );
+                                                                            this.notice =
+                                                                                if text.is_empty() {
+                                                                                    "剪贴板为空"
+                                                                                } else {
+                                                                                    "已粘贴口令"
+                                                                                };
+                                                                            this.live_refresh(cx);
+                                                                        },
+                                                                    ),
+                                                                ),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .h(px(40.))
+                                                        .flex_shrink_0()
+                                                        .min_w_0()
+                                                        .px_3()
+                                                        .pb_1()
+                                                        .child(self.password.clone()),
+                                                )
+                                            })
                                             .child(self.input_header(cx))
                                             .child(
                                                 div()

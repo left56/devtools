@@ -82,6 +82,9 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
         ids::ENCRYPT => "Æ",
         ids::RSA_KEYGEN => "RSA",
         ids::BIP39 => "39",
+        ids::XML_TOOL => "<>",
+        ids::CERT_DECODE => "CRT",
+        ids::BASE64_FILE => "b64",
         _ => "·",
     }
 }
