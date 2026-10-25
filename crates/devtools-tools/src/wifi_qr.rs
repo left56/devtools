@@ -8,7 +8,7 @@ pub fn meta() -> ToolMeta {
         id: ids::WIFI_QR,
         name: "Wi‑Fi QR",
         category: Category::Generators,
-        summary: "生成 WIFI: 连接串与 QR。输入：SSID\\n加密\\n密码（加密=WPA/WEP/nopass）。",
+        summary: "生成 WIFI: 连接串与 SVG 预览。输入：SSID\\n加密\\n密码（加密=WPA/WEP/nopass）。无 ASCII。",
         keywords: &["wifi", "qr", "wpa", "无线"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
