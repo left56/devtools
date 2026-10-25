@@ -14,7 +14,7 @@ use devtools_core::ids;
 use devtools_tools::{
     dns_lookup::{self, DnsResult, RecordKind},
     http_request::{self, HttpResponse, Method},
-    ip_location, network_info, speed_test, whois_tool,
+    ip_location, network_info, page_fetch, whois_tool,
 };
 use gpui::{prelude::FluentBuilder, *};
 
@@ -133,8 +133,8 @@ impl NetworkWorkbench {
                 .map_err(|e| e.to_string()),
             ids::IP_LOCATION => ip_location::lookup(&primary).map(NetworkState::Rows),
             ids::NETWORK_INFO => network_info::collect(true).map(NetworkState::Rows),
-            ids::SPEED_TEST => speed_test::run().map(NetworkState::Rows),
             ids::WHOIS => whois_tool::lookup(&primary).map(NetworkState::Rows),
+            ids::PAGE_FETCH => page_fetch::fetch(&primary).map(NetworkState::Rows),
             _ => Err("未知联网工具".into()),
         };
 
@@ -172,8 +172,8 @@ impl NetworkWorkbench {
             ids::DNS_LOOKUP => ("DNS Lookup", "显式查询"),
             ids::IP_LOCATION => ("IP Location", "显式联网 · 未内置 MMDB"),
             ids::NETWORK_INFO => ("Network Information", "本机网卡 + 公网 IP"),
-            ids::SPEED_TEST => ("Speed Test", "粗测下载 / 延迟"),
             ids::WHOIS => ("Whois", "TCP 43 · 显式连接"),
+            ids::PAGE_FETCH => ("抓取页面", "显式抓取 URL · 原 IndexNow 意图"),
             _ => ("网络工具", ""),
         }
     }
@@ -387,17 +387,17 @@ impl NetworkWorkbench {
 }
 
 fn needs_primary(tool_id: &str) -> bool {
-    !matches!(tool_id, ids::NETWORK_INFO | ids::SPEED_TEST)
+    !matches!(tool_id, ids::NETWORK_INFO)
 }
 
 fn primary_placeholder(tool_id: &str) -> &'static str {
     match tool_id {
         ids::HTTP_REQUEST => "https://example.com/",
         ids::DNS_LOOKUP => "example.com 或 localhost",
-        ids::IP_LOCATION => "8.8.8.8 或 2001:4860:4860::8888",
+        ids::IP_LOCATION => "留空查本机公网 IP，或填 8.8.8.8",
         ids::WHOIS => "example.com",
+        ids::PAGE_FETCH => "https://example.com",
         ids::NETWORK_INFO => "（无需输入；点击运行）",
-        ids::SPEED_TEST => "（无需输入；点击运行）",
         _ => "输入",
     }
 }
@@ -406,8 +406,9 @@ fn primary_label(tool_id: &str) -> &'static str {
     match tool_id {
         ids::HTTP_REQUEST => "URL",
         ids::DNS_LOOKUP => "主机名",
-        ids::IP_LOCATION => "IP",
+        ids::IP_LOCATION => "IP（可空）",
         ids::WHOIS => "域名 / IP",
+        ids::PAGE_FETCH => "URL",
         _ => "输入",
     }
 }

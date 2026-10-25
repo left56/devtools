@@ -10,10 +10,10 @@ pub fn meta() -> ToolMeta {
         id: ids::SPEED_TEST,
         name: "Speed Test",
         category: Category::Web,
-        summary: "粗测下载吞吐与延迟（Cloudflare）。点击「运行」才会联网；非完整测速套件。",
+        summary: "测速（搁置，不在侧栏展示）。后续可接全球测速接口。",
         keywords: &["speed", "bandwidth", "latency", "测速", "带宽"],
         network: NetworkUse::Explicit,
-        availability: Availability::Ready,
+        availability: Availability::LogicOnly,
     }
 }
 

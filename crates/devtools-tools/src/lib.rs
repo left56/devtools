@@ -86,6 +86,7 @@ pub mod ip_location;
 pub mod network_info;
 pub mod speed_test;
 pub mod whois_tool;
+pub mod page_fetch;
 pub mod base64_image;
 pub mod color_palettes;
 pub mod ruler_tool;
@@ -169,8 +170,8 @@ pub fn catalog() -> Vec<ToolMeta> {
         base64_file::meta(),
         ip_location::meta(),
         network_info::meta(),
-        speed_test::meta(),
         whois_tool::meta(),
+        page_fetch::meta(),
         base64_image::meta(),
         color_palettes::meta(),
         ruler_tool::meta(),
@@ -338,8 +339,8 @@ pub fn is_network_tool(id: &str) -> bool {
             | ids_list::DNS_LOOKUP
             | ids_list::IP_LOCATION
             | ids_list::NETWORK_INFO
-            | ids_list::SPEED_TEST
             | ids_list::WHOIS
+            | ids_list::PAGE_FETCH
     )
 }
 
@@ -386,7 +387,8 @@ mod tests {
         assert!(is_network_tool(ids::IP_LOCATION));
         assert!(is_network_tool(ids::WHOIS));
         assert!(is_network_tool(ids::NETWORK_INFO));
-        assert!(is_network_tool(ids::SPEED_TEST));
+        assert!(!is_network_tool(ids::SPEED_TEST));
+        assert!(is_network_tool(ids::PAGE_FETCH));
         assert!(is_batch_tool(ids::MATH_EVAL));
         assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));

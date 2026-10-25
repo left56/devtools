@@ -25,7 +25,6 @@ pub struct Workspace {
     inspector: Entity<InspectorWorkbench>,
     batch: Entity<BatchWorkbench>,
     network: Entity<NetworkWorkbench>,
-    search: Entity<TextField>,
     palette_search: Entity<TextField>,
     palette_open: bool,
     palette_index: usize,
@@ -45,10 +44,7 @@ impl Workspace {
             cx.notify();
         })
         .detach();
-        let search = cx.new(|cx| TextField::new(false, false, "搜索工具", cx));
         let palette_search = cx.new(|cx| TextField::new(false, false, "搜索全部工具…", cx));
-        cx.subscribe(&search, |_, _, _: &Edited, cx| cx.notify())
-            .detach();
         cx.subscribe(&palette_search, |this, _, _: &Edited, cx| {
             this.palette_index = 0;
             cx.notify();
@@ -64,7 +60,6 @@ impl Workspace {
             inspector: cx.new(InspectorWorkbench::new),
             batch: cx.new(BatchWorkbench::new),
             network: cx.new(NetworkWorkbench::new),
-            search,
             palette_search,
             palette_open: false,
             palette_index: 0,
@@ -270,9 +265,6 @@ impl Workspace {
             self.close_palette(window, cx);
         }
         self.sidebar_collapsed = !self.sidebar_collapsed;
-        if self.sidebar_collapsed && self.search.read(cx).focus.is_focused(window) {
-            self.focus_editor(window, cx);
-        }
         cx.notify();
     }
 
@@ -379,119 +371,86 @@ impl Workspace {
             .on_click(cx.listener(move |this, _, window, cx| this.select_tool(id, window, cx)))
     }
 
-    fn compact_sidebar(&self, cx: &mut Context<Self>) -> Div {
+    fn collapsed_chrome(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        // When the sidebar is gone, put「展开」immediately to the right of the
+        // window close / traffic-light cluster (same padding as the old titlebar).
         let theme = Theme::get(cx);
-        let tools: Vec<_> = self
-            .registry
-            .tools()
-            .iter()
-            .map(|tool| {
-                let id = tool.id;
-                div()
-                    .id(SharedString::from(format!("compact-tool-{id}")))
-                    .w_full()
-                    .px_2()
-                    .py_2()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_1()
-                    .bg(if id == self.selected {
-                        theme.selected
-                    } else {
-                        theme.sidebar
-                    })
-                    .hover(move |s| s.bg(theme.selected))
-                    .child(
-                        div()
-                            .font(crate::theme::monospace())
-                            .text_sm()
-                            .text_color(icons::category_tint(tool.category, &theme))
-                            .child(icons::tool_glyph(id)),
-                    )
-                    .child(div().text_xs().text_color(theme.text).child(tool.name))
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| this.select_tool(id, window, cx)),
-                    )
-            })
-            .collect();
         div()
-            .w(px(80.))
-            .h_full()
+            .id("collapsed-chrome")
+            .h(px(titlebar_pad()))
             .flex_shrink_0()
+            .w_full()
+            .pl(px(sidebar_title_pl()))
+            .pr_2()
             .flex()
-            .flex_col()
-            .bg(theme.sidebar)
-            .border_r_1()
+            .items_center()
+            .gap_1()
+            .window_control_area(WindowControlArea::Drag)
+            .on_mouse_down(MouseButton::Left, |event, window, _| {
+                if event.click_count == 2 {
+                    window.titlebar_double_click();
+                }
+            })
+            .child(self.sidebar_toggle(true, cx))
+            .child(div().flex_1())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.faint)
+                    .child("Devtools"),
+            )
+    }
+
+    fn sidebar_search_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = Theme::get(cx);
+        div()
+            .id("sidebar-search-open")
+            .cursor_pointer()
+            .mx(px(crate::theme::space::MD))
+            .mb(px(crate::theme::space::MD))
+            .mt(px(crate::theme::space::SM))
+            .h(px(32.))
+            .px(px(crate::theme::space::SM))
+            .flex()
+            .items_center()
+            .gap_2()
+            .bg(theme.panel)
+            .border_1()
             .border_color(theme.border)
-            .child(div().h(px(titlebar_pad())).flex_shrink_0())
+            .rounded(px(crate::theme::radius::MD))
+            .hover(move |s| s.bg(theme.selected).border_color(theme.accent_muted))
             .child(
                 div()
-                    .p_2()
-                    .flex()
-                    .justify_center()
-                    .child(self.sidebar_toggle(true, cx)),
+                    .text_sm()
+                    .text_color(theme.muted)
+                    .child("⌕"),
             )
             .child(
                 div()
-                    .id("compact-tools")
                     .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .p_2()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .children(tools),
+                    .text_sm()
+                    .text_color(theme.muted)
+                    .child("搜索工具…"),
             )
-            .child(
-                div()
-                    .p_2()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .id("compact-search")
-                            .w_full()
-                            .py_2()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_sm()
-                            .flex()
-                            .justify_center()
-                            .hover(move |s| s.bg(theme.border))
-                            .child("搜索")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_palette(&TogglePalette, window, cx)
-                            })),
-                    )
-                    .child(div().text_xs().text_color(theme.muted).child(palette_hint_short())),
-            )
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.open_palette(&TogglePalette, window, cx)
+            }))
     }
 
     fn sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.sidebar_collapsed {
-            return self.compact_sidebar(cx).into_any_element();
+            // Fully hide the rail — no icon-only strip.
+            return div().into_any_element();
         }
         let theme = Theme::get(cx);
-        let query = self.search.read(cx).buffer.text().to_owned();
-        let tools = self.registry.search(&query, None);
+        let tools = self.registry.search("", None);
         let mut folders = Vec::new();
 
-        // Favorites section (only when not searching, or when matches).
         let fav_tools: Vec<_> = self
             .prefs
             .favorites
             .iter()
             .filter_map(|id| self.registry.get(id))
-            .filter(|tool| {
-                query.trim().is_empty()
-                    || tools.iter().any(|t| t.id == tool.id)
-            })
             .collect();
         if !fav_tools.is_empty() {
             let rows: Vec<_> = fav_tools
@@ -562,19 +521,6 @@ impl Workspace {
             )
             .child(
                 div()
-                    .mx(px(crate::theme::space::MD))
-                    .mb(px(crate::theme::space::SM))
-                    .h(px(30.))
-                    .px(px(crate::theme::space::SM))
-                    .py(px(crate::theme::space::XS))
-                    .bg(theme.panel)
-                    .border_1()
-                    .border_color(theme.border)
-                    .rounded(px(crate::theme::radius::MD))
-                    .child(self.search.clone()),
-            )
-            .child(
-                div()
                     .id("tools")
                     .flex_1()
                     .min_h_0()
@@ -589,16 +535,7 @@ impl Workspace {
                     })
                     .children(folders),
             )
-            .child(
-                div()
-                    .px(px(crate::theme::space::MD))
-                    .py(px(crate::theme::space::MD))
-                    .border_t_1()
-                    .border_color(theme.border_subtle)
-                    .text_xs()
-                    .text_color(theme.faint)
-                    .child(palette_hint()),
-            )
+            .child(self.sidebar_search_button(cx))
             .into_any_element()
     }
 
@@ -834,6 +771,9 @@ impl Render for Workspace {
                     .h_full()
                     .flex()
                     .flex_col()
+                    .when(self.sidebar_collapsed, |view| {
+                        view.child(self.collapsed_chrome(cx))
+                    })
                     .children(self.suggestion_strip(cx))
                     .child(
                         div()
@@ -887,24 +827,3 @@ fn sidebar_title_pl() -> f32 {
     }
 }
 
-fn palette_hint() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        "⌘K 搜索 · ★ 收藏 · ⌘⇧V 粘贴到输入"
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        "Ctrl+K 搜索 · ★ 收藏 · Ctrl+Shift+V 粘贴到输入"
-    }
-}
-
-fn palette_hint_short() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        "⌘K"
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        "Ctrl+K"
-    }
-}
