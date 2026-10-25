@@ -7,8 +7,9 @@ use crate::{
     text_field::{Edited, TextField},
     theme::{self, Theme},
     ui::{
-        button, chip, empty_hint, multiline_mono, pane, pane_header, pane_title, paste_button,
-        primary_button, single_line, status_chip, workbench_title, StatusKind,
+        button, chip, empty_hint, looks_like_ascii_art, looks_like_svg_markup, multiline_mono,
+        multiline_mono_art, pane, pane_header, pane_title, paste_button, primary_button,
+        single_line, status_chip, svg_preview, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -785,6 +786,32 @@ impl BatchWorkbench {
                 .enumerate()
                 .map(|(i, (label, value))| {
                     let copy = value.clone();
+                    let body = if looks_like_svg_markup(label, value) {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(theme::space::SM))
+                            .child(
+                                div()
+                                    .p(px(theme::space::SM))
+                                    .rounded(px(theme::radius::SM))
+                                    .bg(gpui::rgb(0xffffff))
+                                    .border_1()
+                                    .border_color(theme.border_subtle)
+                                    .child(svg_preview(value, 200.)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted)
+                                    .child(single_line("预览 · 点复制取 SVG 源码")),
+                            )
+                            .into_any_element()
+                    } else if looks_like_ascii_art(label, value) {
+                        multiline_mono_art(theme, value.as_str()).into_any_element()
+                    } else {
+                        multiline_mono(theme, value.as_str()).into_any_element()
+                    };
                     div()
                         .id(SharedString::from(format!("batch-row-{i}")))
                         .flex()
@@ -812,7 +839,7 @@ impl BatchWorkbench {
                                 .bg(theme.elevated)
                                 .border_1()
                                 .border_color(theme.border_subtle)
-                                .child(multiline_mono(theme, value.as_str())),
+                                .child(body),
                         )
                         .child(
                             div()

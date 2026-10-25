@@ -165,6 +165,83 @@ pub fn multiline_mono(theme: Theme, text: impl AsRef<str>) -> Div {
     col
 }
 
+/// Monospace art (QR ASCII, banners): no inter-line gap so the grid stays square.
+pub fn multiline_mono_art(theme: Theme, text: impl AsRef<str>) -> Div {
+    let raw = text.as_ref();
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .gap(px(0.))
+        .min_w_0()
+        .font(crate::theme::monospace())
+        .text_sm()
+        .text_color(theme.text);
+    if raw.is_empty() {
+        return col.child(
+            div()
+                .text_color(theme.faint)
+                .child(SharedString::from("—")),
+        );
+    }
+    const MAX_LINES: usize = 200;
+    let total = raw.lines().count();
+    for line in raw.lines().take(MAX_LINES) {
+        let display = if line.is_empty() {
+            SharedString::from(" ")
+        } else {
+            single_line(line)
+        };
+        col = col.child(div().min_w_0().whitespace_nowrap().child(display));
+    }
+    if total > MAX_LINES {
+        col = col.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted)
+                .child(SharedString::from(format!(
+                    "…共 {total} 行，点复制可取全文"
+                ))),
+        );
+    }
+    col
+}
+
+/// Paint an inline SVG string via GPUI's image decoder (usvg). Used for QR / placeholder.
+pub fn svg_preview(svg: &str, side: f32) -> Img {
+    let image = Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec());
+    img(std::sync::Arc::new(image))
+        .w(px(side))
+        .h(px(side))
+        .flex_shrink_0()
+        .object_fit(ObjectFit::Contain)
+}
+
+/// True when a batch row should be painted as an SVG image instead of source text.
+pub fn looks_like_svg_markup(label: &str, value: &str) -> bool {
+    if label.eq_ignore_ascii_case("SVG") || label.eq_ignore_ascii_case("Data URL") {
+        // Data URL is not paintables via ImageFormat::Svg bytes; only raw markup.
+        if label.eq_ignore_ascii_case("Data URL") {
+            return false;
+        }
+        return value.trim_start().starts_with("<svg")
+            || value.trim_start().starts_with("<?xml");
+    }
+    let t = value.trim_start();
+    (t.starts_with("<svg") || t.starts_with("<?xml")) && t.contains("<svg")
+}
+
+/// True for ASCII-art style rows that need tight monospace packing.
+pub fn looks_like_ascii_art(label: &str, value: &str) -> bool {
+    if label.eq_ignore_ascii_case("ASCII") || label.contains("横幅") || label.contains("ASCII") {
+        return true;
+    }
+    // Heuristic: many short lines of #/block drawing
+    let lines: Vec<&str> = value.lines().collect();
+    lines.len() >= 8
+        && lines.iter().all(|l| l.len() <= 120)
+        && lines.iter().filter(|l| l.contains('#') || l.contains('█')).count() >= 4
+}
+
 /// Compact warning / error / info banner.
 pub fn banner(theme: Theme, kind: StatusKind, text: impl Into<SharedString>) -> Div {
     let (fg, bg, border) = status_colors(theme, kind);
@@ -358,11 +435,29 @@ pub fn paste_button(theme: Theme, id: impl Into<SharedString>) -> Stateful<Div> 
 
 #[cfg(test)]
 mod tests {
-    use super::single_line;
+    use super::{looks_like_ascii_art, looks_like_svg_markup, single_line};
 
     #[test]
     fn single_line_flattens_newlines() {
         let s = single_line("a\nb\rc");
         assert_eq!(s.as_ref(), "a b c");
+    }
+
+    #[test]
+    fn detects_svg_rows() {
+        assert!(looks_like_svg_markup(
+            "SVG",
+            r#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>"#
+        ));
+        assert!(!looks_like_svg_markup("Data URL", "data:image/svg+xml,%3Csvg"));
+        assert!(!looks_like_svg_markup("明文", "hello"));
+    }
+
+    #[test]
+    fn detects_ascii_art_rows() {
+        let grid = "# #\n# #\n# #\n# #\n# #\n# #\n# #\n# #\n";
+        assert!(looks_like_ascii_art("ASCII", grid));
+        assert!(looks_like_ascii_art("ASCII 横幅", "x"));
+        assert!(!looks_like_ascii_art("Hex", "deadbeef"));
     }
 }
