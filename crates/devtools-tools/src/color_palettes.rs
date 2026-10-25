@@ -8,7 +8,7 @@ pub fn meta() -> ToolMeta {
         id: ids::COLOR_PALETTES,
         name: "Color Palettes",
         category: Category::Graphics,
-        summary: "从种子色生成互补 / 类似 / 三元组 / 单色阶。输入 #hex / rgb / hsl。",
+        summary: "从种子色生成互补 / 类似 / 三元组 / 单色阶；色盘点选 + 色块预览。",
         keywords: &["palette", "color", "complementary", "色板", "配色"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,

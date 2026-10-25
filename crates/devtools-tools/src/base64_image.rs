@@ -29,8 +29,8 @@ pub fn meta() -> ToolMeta {
         id: ids::BASE64_IMAGE,
         name: "Base64 Image",
         category: Category::Graphics,
-        summary: "图片路径 ↔ Base64 / data URL。离线；无相机/系统选图器，粘贴路径或 data URL。",
-        keywords: &["base64", "image", "png", "jpeg", "data-url", "图片"],
+        summary: "图片路径 ↔ Base64 / data URL。离线；拖拽图片或粘贴路径 / data URL。",
+        keywords: &["base64", "image", "png", "jpeg", "data-url", "图片", "拖拽"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }

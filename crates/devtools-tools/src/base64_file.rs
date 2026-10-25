@@ -30,8 +30,8 @@ pub fn meta() -> ToolMeta {
         id: ids::BASE64_FILE,
         name: "Base64 file",
         category: Category::Encoding,
-        summary: "文件路径 ↔ Base64。编码：粘贴路径读入；解码：粘贴 Base64，可选「路径\\nBase64」写出。无系统文件选择器。",
-        keywords: &["base64", "file", "binary", "文件", "路径"],
+        summary: "文件路径 ↔ Base64。编码：拖入文件或粘贴路径；解码：粘贴 Base64，可选「路径\\nBase64」写出。",
+        keywords: &["base64", "file", "binary", "文件", "路径", "拖拽"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }

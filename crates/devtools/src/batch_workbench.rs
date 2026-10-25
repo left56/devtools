@@ -7,9 +7,10 @@ use crate::{
     text_field::{Edited, TextField},
     theme::{self, Theme},
     ui::{
-        button, chip, empty_hint, looks_like_ascii_art, looks_like_svg_markup, multiline_mono,
-        multiline_mono_art, pane, pane_header, pane_title, paste_button, primary_button,
-        single_line, status_chip, svg_preview, workbench_title, StatusKind,
+        button, chip, color_swatch, empty_hint, extract_hex_color, looks_like_ascii_art,
+        looks_like_svg_markup, multiline_mono, multiline_mono_art, pane,
+        pane_header, pane_title, paste_button, primary_button, single_line, status_chip,
+        svg_preview, workbench_title, StatusKind,
     },
 };
 use devtools_core::ids;
@@ -590,7 +591,7 @@ impl BatchWorkbench {
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("编码=文件路径 · 解码可「路径\\nBase64」写出"),
+                    .child("拖入文件或粘贴路径 · 解码可「路径\\nBase64」写出"),
             );
         } else if self.tool_id == ids::BASE64_IMAGE {
             row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
@@ -605,6 +606,12 @@ impl BatchWorkbench {
                     },
                 )));
             }
+            row = row.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child("支持拖拽图片文件"),
+            );
         } else if self.tool_id == ids::SVG_EDIT {
             row = row.child(div().text_xs().text_color(theme.muted).child("模式"));
             for mode in SvgMode::ALL {
@@ -839,6 +846,287 @@ impl BatchWorkbench {
         pane_view
     }
 
+    fn is_color_tool(tool_id: &str) -> bool {
+        matches!(
+            tool_id,
+            ids::COLOR | ids::COLOR_PALETTES | ids::TAILWIND_COLORS
+        )
+    }
+
+    fn is_file_drop_tool(tool_id: &str) -> bool {
+        matches!(tool_id, ids::BASE64_IMAGE | ids::BASE64_FILE)
+    }
+
+    fn apply_dropped_paths(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = paths.paths().first() else {
+            self.notice = "未收到文件路径";
+            cx.notify();
+            return;
+        };
+        let text = path.to_string_lossy().to_string();
+        self.input.update(cx, |field, cx| {
+            field.set_input(&text, cx);
+            field.focus(window);
+        });
+        self.notice = "已拖入文件";
+        if self.tool_id == ids::BASE64_IMAGE {
+            self.b64_image_mode = Base64ImageMode::Encode;
+            self.b64_image_mode_manual = true;
+        } else if self.tool_id == ids::BASE64_FILE {
+            self.b64_file_mode = Base64FileMode::Encode;
+            self.b64_file_mode_manual = true;
+        }
+        self.live_refresh(cx);
+    }
+
+    fn apply_color_hex(&mut self, hex: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.input.update(cx, |field, cx| {
+            field.set_input(hex, cx);
+            field.focus(window);
+        });
+        self.notice = "";
+        self.live_refresh(cx);
+    }
+
+    /// DevUtils-style live preview + hue strip + lightness chips for quick pick.
+    fn color_picker_panel(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = Theme::get(cx);
+        let current = self.input.read(cx).buffer.text().to_owned();
+        let preview_hex = color_tool::parse_color(&current)
+            .ok()
+            .map(color_tool::to_hex)
+            .or_else(|| extract_hex_color(&current))
+            .unwrap_or_else(|| "#3366CC".into());
+        let hues = color_tool::hue_wheel(24, 0.85, 0.5);
+        let lights = [
+            ("亮", 0.85_f64),
+            ("浅", 0.7),
+            ("中", 0.5),
+            ("深", 0.32),
+            ("暗", 0.18),
+        ];
+
+        let mut hue_row = div()
+            .id("color-hue-strip")
+            .flex()
+            .flex_wrap()
+            .gap(px(2.))
+            .w_full();
+        for (i, hex) in hues.into_iter().enumerate() {
+            let pick = hex.clone();
+            hue_row = hue_row.child(
+                div()
+                    .id(SharedString::from(format!("hue-{i}")))
+                    .cursor_pointer()
+                    .w(px(18.))
+                    .h(px(18.))
+                    .rounded(px(theme::radius::SM))
+                    .bg({
+                        let s = hex.trim_start_matches('#');
+                        let n = u32::from_str_radix(s, 16).unwrap_or(0);
+                        rgb(n)
+                    })
+                    .border_1()
+                    .border_color(theme.border_subtle)
+                    .hover(|s| s.border_color(theme.accent))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.apply_color_hex(&pick, window, cx);
+                    })),
+            );
+        }
+
+        let mut light_row = div()
+            .id("color-light-strip")
+            .flex()
+            .items_center()
+            .gap(px(theme::space::SM))
+            .flex_wrap();
+        // Derive hue of current preview for lightness chips
+        let base_h = color_tool::parse_color(&preview_hex)
+            .ok()
+            .and_then(|rgb| {
+                // convert_all includes HSL — parse degrees from "hsl(N, …)"
+                color_tool::convert_all(&color_tool::to_hex(rgb))
+                    .ok()
+                    .and_then(|rows| {
+                        rows.into_iter()
+                            .find(|(k, _)| *k == "HSL")
+                            .and_then(|(_, v)| {
+                                v.trim()
+                                    .trim_start_matches("hsl(")
+                                    .split(',')
+                                    .next()
+                                    .and_then(|s| s.trim().parse::<f64>().ok())
+                            })
+                    })
+            })
+            .unwrap_or(210.0);
+        for (i, (label, l)) in lights.into_iter().enumerate() {
+            let hex = color_tool::hsl_hex(base_h, 0.85, l);
+            let pick = hex.clone();
+            light_row = light_row.child(
+                div()
+                    .id(SharedString::from(format!("light-{i}")))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .px(px(theme::space::SM))
+                    .h(px(28.))
+                    .rounded(px(theme::radius::MD))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.elevated)
+                    .hover(|s| s.bg(theme.selected))
+                    .child(color_swatch(&hex, 14.))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted)
+                            .child(label),
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.apply_color_hex(&pick, window, cx);
+                    })),
+            );
+        }
+
+        // Common presets (DevUtils-ish quick palette)
+        let presets = [
+            "#EF4444", "#F97316", "#EAB308", "#22C55E", "#14B8A6", "#3B82F6", "#6366F1",
+            "#A855F7", "#EC4899", "#64748B", "#0F172A", "#F8FAFC",
+        ];
+        let mut preset_row = div()
+            .id("color-presets")
+            .flex()
+            .flex_wrap()
+            .gap(px(theme::space::SM));
+        for (i, hex) in presets.into_iter().enumerate() {
+            let pick = hex.to_string();
+            preset_row = preset_row.child(
+                div()
+                    .id(SharedString::from(format!("preset-{i}")))
+                    .cursor_pointer()
+                    .child(color_swatch(hex, 22.))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.apply_color_hex(&pick, window, cx);
+                    })),
+            );
+        }
+
+        div()
+            .id("color-picker")
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
+            .gap(px(theme::space::SM))
+            .p(px(theme::space::MD))
+            .rounded(px(theme::radius::MD))
+            .bg(theme.panel)
+            .border_1()
+            .border_color(theme.border)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(theme::space::MD))
+                    .child(color_swatch(&preview_hex, 56.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.text)
+                                    .child("实时预览"),
+                            )
+                            .child(
+                                div()
+                                    .font(crate::theme::monospace())
+                                    .text_sm()
+                                    .text_color(theme.muted)
+                                    .child(single_line(preview_hex.as_str())),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.faint)
+                                    .child("点色盘 / 明暗 / 预设快速填入"),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.muted)
+                    .child("色相"),
+            )
+            .child(hue_row)
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.muted)
+                    .child("明度"),
+            )
+            .child(light_row)
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.muted)
+                    .child("预设"),
+            )
+            .child(preset_row)
+    }
+
+    fn file_drop_zone(
+        &self,
+        theme: Theme,
+        cx: &mut Context<Self>,
+        inner: Div,
+    ) -> Stateful<Div> {
+        let accent = theme.accent;
+        let accent_muted = theme.accent_muted;
+        div()
+            .id("file-drop-zone")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .rounded(px(theme::radius::MD))
+            .border_2()
+            .border_color(theme.border)
+            .border_dashed()
+            .can_drop(|data, _, _| data.is::<ExternalPaths>())
+            .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                style.bg(accent_muted).border_color(accent)
+            })
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                this.apply_dropped_paths(paths, window, cx);
+            }))
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .px(px(theme::space::MD))
+                    .pt(px(theme::space::SM))
+                    .text_xs()
+                    .text_color(theme.muted)
+                    .child("拖拽文件到此处，或粘贴路径"),
+            )
+            .child(inner)
+    }
+
     /// Tools whose single mode result should fill the whole result pane
     /// (no nested label | mini-box | 复制 row). Mode chips live in the options bar.
     fn uses_full_result_pane(tool_id: &str, row_count: usize) -> bool {
@@ -991,6 +1279,10 @@ impl BatchWorkbench {
             .enumerate()
             .map(|(i, (label, value))| {
                 let copy = value.clone();
+                let is_preview = *label == "预览" || *label == "种子";
+                let swatch_hex = extract_hex_color(value);
+                let row_h = if is_preview { 48. } else { 36. };
+                let swatch_side = if is_preview { 32. } else { 20. };
                 div()
                     .id(SharedString::from(format!("batch-sl-row-{i}")))
                     .flex()
@@ -1009,18 +1301,27 @@ impl BatchWorkbench {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .h(px(36.))
+                            .h(px(row_h))
                             .px(px(theme::space::SM))
                             .flex()
                             .items_center()
+                            .gap(px(theme::space::SM))
                             .rounded(px(theme::radius::SM))
                             .bg(theme.elevated)
                             .border_1()
                             .border_color(theme.border_subtle)
-                            .font(crate::theme::monospace())
-                            .text_sm()
-                            .text_color(theme.text)
-                            .child(single_line(value.as_str())),
+                            .when_some(swatch_hex.as_ref(), |d, hex| {
+                                d.child(color_swatch(hex, swatch_side))
+                            })
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .font(crate::theme::monospace())
+                                    .text_sm()
+                                    .text_color(theme.text)
+                                    .child(single_line(value.as_str())),
+                            ),
                     )
                     .child(copy_chip(format!("batch-sl-copy-{i}"), copy, cx))
                     .into_any_element()
@@ -1071,7 +1372,7 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::PERCENTAGE => "两个数字，例如 25 200",
         ids::CHMOD => "例如 755 或 rwxr-xr-x",
         ids::BINARY => "文本，或二进制 / 十六进制",
-        ids::COLOR => "#336699 或 rgb(51, 102, 153)",
+        ids::COLOR => "#336699 / rgb() / hsl()，或点下方色盘",
         ids::BASIC_AUTH => "user:password",
         ids::HMAC => "第一行：密钥 · 其余：消息",
         ids::OTP => "Base32 密钥；可选第二行验证码",
@@ -1101,12 +1402,12 @@ fn placeholder_for(tool_id: &str) -> &'static str {
         ids::DOCKER_RUN => "docker run -d --name web -p 80:80 nginx",
         ids::XML_TOOL => "<root><item>1</item></root>",
         ids::CERT_DECODE => "-----BEGIN CERTIFICATE----- …",
-        ids::BASE64_FILE => "/path/to/file 或 Base64 正文",
-        ids::BASE64_IMAGE => "/path/to/image.png 或 data:image/…;base64,…",
-        ids::COLOR_PALETTES => "#3366cc 或 rgb(51,102,204)",
+        ids::BASE64_FILE => "拖入文件，或粘贴路径 / Base64 正文",
+        ids::BASE64_IMAGE => "拖入图片，或粘贴路径 / data:image/…;base64,…",
+        ids::COLOR_PALETTES => "#3366cc，或点下方色盘",
         ids::RULER => "16px 或 1.5rem 或 12pt",
         ids::SVG_EDIT => "<svg>…</svg>",
-        ids::TAILWIND_COLORS => "blue-500 或 #3b82f6 或 blue",
+        ids::TAILWIND_COLORS => "blue-500 / #3b82f6 / blue，或点色盘",
         ids::ENCRYPT => "明文或 Base64 密文",
         _ => "在这里粘贴输入",
     }
@@ -1402,6 +1703,9 @@ impl Render for BatchWorkbench {
                                     .child(self.input.clone()),
                             ),
                     )
+                    .when(Self::is_color_tool(self.tool_id), |view| {
+                        view.child(self.color_picker_panel(cx))
+                    })
                     .child(self.single_line_results(cx))
                 },
             )
@@ -1476,14 +1780,25 @@ impl Render for BatchWorkbench {
                                                 )
                                             })
                                             .child(self.input_header(cx))
-                                            .child(
-                                                div()
+                                            .when(Self::is_file_drop_tool(self.tool_id), |p| {
+                                                let inner = div()
                                                     .flex_1()
                                                     .min_h_0()
                                                     .min_w_0()
                                                     .p_3()
-                                                    .child(self.input.clone()),
-                                            ),
+                                                    .child(self.input.clone());
+                                                p.child(self.file_drop_zone(theme, cx, inner))
+                                            })
+                                            .when(!Self::is_file_drop_tool(self.tool_id), |p| {
+                                                p.child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_h_0()
+                                                        .min_w_0()
+                                                        .p_3()
+                                                        .child(self.input.clone()),
+                                                )
+                                            }),
                                     )
                                 },
                             )

@@ -230,6 +230,59 @@ pub fn looks_like_svg_markup(label: &str, value: &str) -> bool {
     (t.starts_with("<svg") || t.starts_with("<?xml")) && t.contains("<svg")
 }
 
+/// Extract first `#RGB` / `#RRGGBB` (case-insensitive) from a string.
+pub fn extract_hex_color(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'#' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_hexdigit() {
+                j += 1;
+            }
+            let len = j - i - 1;
+            if len == 3 || len == 6 {
+                let raw = &text[i + 1..j];
+                let expanded = if len == 3 {
+                    let mut s = String::with_capacity(7);
+                    s.push('#');
+                    for c in raw.chars() {
+                        s.push(c);
+                        s.push(c);
+                    }
+                    s
+                } else {
+                    format!("#{raw}")
+                };
+                return Some(expanded.to_ascii_uppercase());
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Parse `#RGB`/`#RRGGBB` (or text containing one) into an opaque [`Rgba`].
+pub fn hex_to_rgba(text: &str) -> Option<Rgba> {
+    let hex = extract_hex_color(text)?;
+    let s = hex.trim_start_matches('#');
+    let n = u32::from_str_radix(s, 16).ok()?;
+    Some(rgb(n))
+}
+
+/// Rounded color swatch for live previews (DevUtils-style).
+pub fn color_swatch(hex: &str, side: f32) -> Div {
+    let fill = hex_to_rgba(hex).unwrap_or_else(|| rgb(0x888888));
+    div()
+        .flex_shrink_0()
+        .w(px(side))
+        .h(px(side))
+        .rounded(px(radius::SM))
+        .bg(fill)
+        .border_1()
+        .border_color(rgba(0x00000033))
+}
+
 /// True for ASCII-art style rows that need tight monospace packing.
 pub fn looks_like_ascii_art(label: &str, value: &str) -> bool {
     if label.eq_ignore_ascii_case("ASCII") || label.contains("横幅") || label.contains("ASCII") {

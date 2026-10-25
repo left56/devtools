@@ -7,8 +7,8 @@ pub fn meta() -> ToolMeta {
         id: ids::COLOR,
         name: "Color Inspector",
         category: Category::Graphics,
-        summary: "颜色检查器：#hex / rgb / hsl / hsv / cmyk 互转。",
-        keywords: &["color", "hex", "rgb", "hsl", "hsv", "cmyk", "颜色", "取色"],
+        summary: "颜色检查器：预览色块、色盘点选、#hex / rgb / hsl / hsv / cmyk。",
+        keywords: &["color", "hex", "rgb", "hsl", "hsv", "cmyk", "颜色", "取色", "色盘", "预览"],
         network: NetworkUse::Offline,
         availability: Availability::Ready,
     }
@@ -21,13 +21,34 @@ pub struct Rgb {
     pub b: u8,
 }
 
+pub fn to_hex(rgb: Rgb) -> String {
+    format!("#{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b)
+}
+
+/// Evenly spaced hues at fixed S/L — for the quick color wheel strip.
+pub fn hue_wheel(count: usize, s: f64, l: f64) -> Vec<String> {
+    let n = count.max(1);
+    (0..n)
+        .map(|i| {
+            let h = (i as f64) * 360.0 / n as f64;
+            to_hex(hsl_to_rgb(h, s, l))
+        })
+        .collect()
+}
+
+pub fn hsl_hex(h: f64, s: f64, l: f64) -> String {
+    to_hex(hsl_to_rgb(h, s, l))
+}
+
 pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
-    let rgb = parse(input)?;
+    let rgb = parse_color(input)?;
     let (h, s, l) = rgb_to_hsl(rgb);
     let (hv, sv, vv) = rgb_to_hsv(rgb);
     let (c, m, y, k) = rgb_to_cmyk(rgb);
-    Ok(vec![
-        ("HEX", format!("#{:02X}{:02X}{:02X}", rgb.r, rgb.g, rgb.b)),
+    let hex = to_hex(rgb);
+    let mut rows = vec![
+        ("预览", hex.clone()),
+        ("HEX", hex.clone()),
         ("hex", format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b)),
         ("RGB", format!("rgb({}, {}, {})", rgb.r, rgb.g, rgb.b)),
         (
@@ -61,10 +82,25 @@ pub fn convert_all(input: &str) -> Result<Vec<(&'static str, String)>, String> {
         ("R", rgb.r.to_string()),
         ("G", rgb.g.to_string()),
         ("B", rgb.b.to_string()),
-    ])
+        ("互补", to_hex(hsl_to_rgb((h + 180.0) % 360.0, s, l))),
+    ];
+    for (i, factor) in [0.9_f64, 0.75, 0.6].into_iter().enumerate() {
+        rows.push((
+            ["浅色 1", "浅色 2", "浅色 3"][i],
+            to_hex(hsl_to_rgb(h, s, factor.clamp(0.05, 0.95))),
+        ));
+    }
+    for (i, factor) in [0.4_f64, 0.25, 0.12].into_iter().enumerate() {
+        rows.push((
+            ["深色 1", "深色 2", "深色 3"][i],
+            to_hex(hsl_to_rgb(h, s, factor.clamp(0.05, 0.95))),
+        ));
+    }
+    Ok(rows)
 }
 
-fn parse(input: &str) -> Result<Rgb, String> {
+/// Parse `#hex` / `rgb()` / `hsl()` into RGB.
+pub fn parse_color(input: &str) -> Result<Rgb, String> {
     let t = input.trim();
     if t.is_empty() {
         return Err("输入为空".into());
@@ -222,19 +258,28 @@ mod tests {
     #[test]
     fn hex_round() {
         let rows = convert_all("#336699").unwrap();
-        assert_eq!(rows[0].1, "#336699");
-        assert_eq!(rows[2].1, "rgb(51, 102, 153)");
+        assert_eq!(rows.iter().find(|r| r.0 == "HEX").unwrap().1, "#336699");
+        assert_eq!(
+            rows.iter().find(|r| r.0 == "RGB").unwrap().1,
+            "rgb(51, 102, 153)"
+        );
+        assert!(rows.iter().any(|r| r.0 == "浅色 1"));
     }
 
     #[test]
     fn rgb_input() {
         let rows = convert_all("rgb(255, 0, 0)").unwrap();
-        assert_eq!(rows[1].1, "#ff0000");
+        assert_eq!(rows.iter().find(|r| r.0 == "hex").unwrap().1, "#ff0000");
     }
 
     #[test]
     fn short_hex() {
         let rows = convert_all("#f00").unwrap();
-        assert_eq!(rows[0].1, "#FF0000");
+        assert_eq!(rows.iter().find(|r| r.0 == "HEX").unwrap().1, "#FF0000");
+    }
+
+    #[test]
+    fn hue_wheel_count() {
+        assert_eq!(hue_wheel(12, 0.85, 0.5).len(), 12);
     }
 }
