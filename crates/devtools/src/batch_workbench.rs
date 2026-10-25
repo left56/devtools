@@ -765,9 +765,48 @@ impl BatchWorkbench {
         ))
     }
 
+
+    /// Full-pane document output (SQL 美化/压缩): header + 复制, body fills the pane.
+    fn full_document_result_pane(&self, cx: &mut Context<Self>) -> Div {
+        let theme = Theme::get(cx);
+        let value = self.rows.first().map(|(_, v)| v.as_str()).unwrap_or("");
+        let copy = value.to_owned();
+        let mut header = pane_header(theme).child(pane_title(theme, "结果"));
+        if !value.is_empty() {
+            header = header.child(copy_chip("batch-full-copy".into(), copy, cx));
+        }
+        let mut pane_view = pane(theme).flex_1().child(header);
+        if self.rows.is_empty() && self.error.is_none() {
+            pane_view = pane_view.child(empty_hint(theme, "输入后显示结果"));
+        } else if !value.is_empty() {
+            pane_view = pane_view.child(
+                div()
+                    .id("batch-full-result")
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.result_scroll)
+                    .p_3()
+                    .child(multiline_mono(theme, value)),
+            );
+        }
+        pane_view
+    }
+
+    /// Tools whose single mode result should fill the whole result pane
+    /// (no nested label | mini-box | 复制 row). Mode chips live in the options bar.
+    fn uses_full_result_pane(tool_id: &str) -> bool {
+        matches!(tool_id, ids::SQL_FORMAT)
+    }
+
     /// Multi-line / generate tools: values may wrap; enclosed in a pane.
     fn result_pane(&self, cx: &mut Context<Self>) -> Div {
         let theme = Theme::get(cx);
+        // SQL (and similar): one document fills the pane — mirror the input side.
+        if Self::uses_full_result_pane(self.tool_id) {
+            return self.full_document_result_pane(cx);
+        }
         let header = pane_header(theme).child(pane_title(theme, "结果"));
         let mut pane_view = pane(theme).flex_1().child(header);
         if self.rows.is_empty() && self.error.is_none() {
