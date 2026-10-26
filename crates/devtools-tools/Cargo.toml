@@ -1,0 +1,44 @@
+[package]
+name = "devtools-tools"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Pure tool implementations for the Devtools toolbox"
+
+[dependencies]
+base64 = { workspace = true }
+devtools-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+json5 = { workspace = true }
+md-5 = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+sha3 = { workspace = true }
+ripemd = { workspace = true }
+hmac = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+percent-encoding = { workspace = true }
+regex = { workspace = true }
+url = { workspace = true }
+similar = { workspace = true }
+cron = { workspace = true }
+ureq = { workspace = true }
+dns-lookup = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+pulldown-cmark = { workspace = true }
+quick-xml = { workspace = true }
+csv = { workspace = true }
+qrcode = { workspace = true }
+fasteval = { workspace = true }
+bcrypt = { workspace = true }
+aes-gcm = { workspace = true }
+rsa = { workspace = true }
+bip39 = { workspace = true }
+x509-parser = { workspace = true }
+rand = { workspace = true }
+
+[lints]
+workspace = true

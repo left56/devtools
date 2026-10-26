@@ -1,0 +1,48 @@
+# Fast PR checks (tools + full workspace on Linux).
+name: CI
+
+on:
+  push:
+    branches: [main, feat/m2-tools]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test-linux:
+    name: test · clippy (Linux)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GPUI / X11 system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config clang cmake \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-keysyms1-dev libxcb-randr0-dev libxcb-image0-dev \
+            libxcb-util-dev libxcb-icccm4-dev \
+            libfontconfig1-dev libfreetype6-dev \
+            libegl-dev libvulkan-dev mesa-vulkan-drivers
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test workspace
+        run: cargo test --workspace --all-targets
+
+      - name: Clippy (-D warnings)
+        run: cargo clippy -p devtools-core -p devtools-tools -p devtools --all-targets -- -D warnings

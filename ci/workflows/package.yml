@@ -1,0 +1,195 @@
+# Cross-platform release packages for the GPUI shell.
+#
+# Triggers:
+#   - push to main / feat/m2-tools → build + upload Actions artifacts
+#   - pull_request → same (download from the PR Checks → Artifacts)
+#   - push tag v* → also publish a GitHub Release with the packages
+#   - workflow_dispatch → manual rebuild
+#
+# Artifact matrix (see docs/packaging.md):
+#   Linux x86_64   → .tar.gz + .deb
+#   macOS aarch64  → .app.zip + unsigned .dmg
+#   #   Windows x86_64 → .zip (experimental; continue-on-error — GPUI Windows unverified)
+name: Package
+
+on:
+  push:
+    branches: [main, feat/m2-tools]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  package-linux:
+    name: Linux x86_64 (tar.gz · deb)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GPUI / X11 system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config clang cmake dpkg-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-keysyms1-dev libxcb-randr0-dev libxcb-image0-dev \
+            libxcb-util-dev libxcb-icccm4-dev \
+            libfontconfig1-dev libfreetype6-dev \
+            libegl-dev libvulkan-dev mesa-vulkan-drivers
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package-linux
+
+      - name: Build release
+        run: cargo build --release -p devtools
+
+      - name: Package tar.gz + deb
+        run: |
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          export VERSION
+          bash script/package-linux.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: devtools-linux-x86_64
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  package-macos:
+    name: macOS ${{ matrix.arch }} (app.zip · dmg)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-13 (Intel) often stays queued indefinitely on GitHub; ship Apple Silicon first.
+          - runner: macos-14
+            arch: aarch64
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      # GitHub macOS runners ship Xcode with Metal; `-downloadComponent MetalToolchain`
+      # exits 64 on current images (invalid component). Use the installed SDK only.
+      - name: Verify Metal SDK (no download)
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --show-sdk-path
+          xcrun -f metal
+          xcrun -f metallib
+          echo "Metal tools OK"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package-macos-${{ matrix.arch }}
+
+      - name: Build release
+        run: cargo build --release -p devtools --target ${{ matrix.target }}
+
+      - name: Package .app zip + unsigned DMG
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH_LABEL: ${{ matrix.arch }}
+        run: |
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          export VERSION
+          bash script/package-macos.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: devtools-macos-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  package-windows:
+    name: Windows x86_64 (zip, experimental)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    # GPUI Windows is still a placeholder in Cargo.toml — do not fail the matrix.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package-windows
+
+      - name: Build release
+        run: cargo build --release -p devtools
+        shell: bash
+
+      - name: Package zip
+        run: powershell -ExecutionPolicy Bypass -File script/package-windows.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: devtools-windows-x86_64
+          path: dist/*.zip
+          if-no-files-found: warn
+          retention-days: 14
+
+  release:
+    name: GitHub Release (tags only)
+    needs: [package-linux, package-macos, package-windows]
+    # Publish even if experimental Windows failed; require Linux + at least one macOS.
+    if: >-
+      always()
+      && startsWith(github.ref, 'refs/tags/v')
+      && needs.package-linux.result == 'success'
+      && needs.package-macos.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten + checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.deb' -o -name '*.zip' -o -name '*.dmg' \) \
+            -exec cp -v {} dist/ \;
+          cd dist
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

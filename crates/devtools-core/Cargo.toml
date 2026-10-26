@@ -1,0 +1,11 @@
+[package]
+name = "devtools-core"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Tool catalog, registry, and search for the Devtools toolbox"
+
+[dependencies]
+
+[lints]
+workspace = true
