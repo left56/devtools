@@ -68,6 +68,18 @@ xcodebuild -downloadComponent MetalToolchain
 
 已知剩余差异：macOS 融合标题栏与签名分发（Metal 本轮未复验）；Linux Wayland 未验；证书/CSV/SQL 仍为后续。`xattr` 0.2 与新 `libc` 的冲突见 `patches/`。
 
+## 安装包（GitHub Actions）
+
+工作流定义在 `ci/workflows/`；首次需拷入 `.github/workflows/` 启用（见 [docs/packaging.md](docs/packaging.md)）。启用后 Push/PR 编译各平台包，打 `v*` tag 发 GitHub Release。
+
+摘要：
+
+| 平台 | 产物 |
+| --- | --- |
+| Linux x86_64 | `.tar.gz` + `.deb` |
+| macOS aarch64 / x86_64 | `.app` 的 `.zip` + 未签名 `.dmg` |
+| Windows x86_64 | `.zip`（实验性，失败不阻断） |
+
 ## 命令
 
 ```bash
