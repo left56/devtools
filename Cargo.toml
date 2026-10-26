@@ -68,3 +68,6 @@ all = { level = "warn", priority = -1 }
 # upstream xattr 0.2.x is fixed or gpui moves off xattr 0.2.
 [patch.crates-io]
 xattr = { path = "patches/xattr-0.2.3" }
+# GHSA-38c5-483c-4qqp / CVE-2026-42199: integer overflow in expand_rows (grid <=1.0.0).
+# taffy 0.9 (via gpui 0.2.2) pins grid 0.18.0; force fixed 1.0.1 (API-compatible for taffy).
+grid = { path = "patches/grid-1.0.1" }

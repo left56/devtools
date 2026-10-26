@@ -92,8 +92,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Metal Toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
+      # GitHub macOS runners ship Xcode with Metal; `-downloadComponent MetalToolchain`
+      # exits 64 on current images (invalid component). Use the installed SDK only.
+      - name: Verify Metal SDK (no download)
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --show-sdk-path
+          xcrun -f metal
+          xcrun -f metallib
+          echo "Metal tools OK"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
