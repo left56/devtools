@@ -11,6 +11,8 @@ ARCH_LABEL="${ARCH_LABEL:-aarch64}"
 DIST="${DIST:-dist}"
 APP_NAME="Devtools"
 BUNDLE="$DIST/${APP_NAME}.app"
+ICON_ICNS="$ROOT/assets/icon/AppIcon.icns"
+ICONSET="$ROOT/assets/icon/AppIcon.iconset"
 
 if [[ -n "$TARGET" && -f "target/${TARGET}/release/devtools" ]]; then
   BIN="target/${TARGET}/release/devtools"
@@ -22,6 +24,16 @@ test -x "$BIN"
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 install -m755 "$BIN" "$BUNDLE/Contents/MacOS/devtools"
+
+# App icon: prefer checked-in .icns; else build from .iconset on macOS.
+if [[ -f "$ICON_ICNS" ]]; then
+  cp "$ICON_ICNS" "$BUNDLE/Contents/Resources/AppIcon.icns"
+elif [[ -d "$ICONSET" ]] && command -v iconutil >/dev/null 2>&1; then
+  iconutil -c icns "$ICONSET" -o "$BUNDLE/Contents/Resources/AppIcon.icns"
+else
+  echo "warning: no AppIcon.icns / iconutil; app will use default icon" >&2
+fi
+
 cat > "$BUNDLE/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -39,6 +51,8 @@ cat > "$BUNDLE/Contents/Info.plist" << PLIST
   <string>${VERSION}</string>
   <key>CFBundleVersion</key>
   <string>${VERSION}</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>

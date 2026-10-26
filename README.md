@@ -40,11 +40,26 @@
 
 | 平台 | 产物 |
 | --- | --- |
-| Linux x86_64 | `.tar.gz`、`.deb` |
-| macOS aarch64 | `.zip`（内含 `Devtools.app`）、未签名 `.dmg` |
+| Linux x86_64 | `.tar.gz`、`.deb`（含桌面图标） |
+| macOS aarch64 | `.zip`（内含带图标的 `Devtools.app`）、未签名 `.dmg` |
 | Windows x86_64 | `.zip`（实验性） |
 
-打包说明、触发方式与本地等价命令见 [docs/packaging.md](docs/packaging.md)。macOS 包未签名/未公证，Gatekeeper 可能提示；Windows 构建失败不阻断 Release。
+打包说明、触发方式与本地等价命令见 [docs/packaging.md](docs/packaging.md)。Windows 构建失败不阻断 Release。
+
+### macOS
+
+当前发布包**未签名、未公证**，从浏览器下载后系统可能加上隔离属性（quarantine），Gatekeeper 会拦截打开。
+
+1. 把 `Devtools.app` 拖到 `/Applications`。
+2. 若双击被拦，或提示「无法验证开发者」，在终端执行：
+
+```bash
+sudo xattr -cr /Applications/Devtools.app
+```
+
+3. 再双击打开；第一次也可用右键 →「打开」。
+
+说明：这里的 `xattr` 是 macOS 自带的扩展属性命令，用来清除下载隔离标记，与仓库 `patches/` 里 Rust 的 `xattr` crate 补丁无关。应用包内已带 `AppIcon.icns` 图标。
 
 ## 从源码构建
 
@@ -69,6 +84,7 @@ cargo clippy -p devtools-core -p devtools-tools --all-targets -- -D warnings
 crates/devtools/        GPUI 壳：窗口、工作台、主题、快捷键
 crates/devtools-core/   分类、工具元数据、注册表、搜索（无 GPUI）
 crates/devtools-tools/  纯函数实现与剪贴板猜测（可移植）
+assets/icon/            应用图标（PNG / SVG / AppIcon.icns）
 docs/                   研发计划、打包与验证记录
 ```
 

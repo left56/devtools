@@ -28,12 +28,27 @@ git push origin v0.1.0
 
 | 平台 | Runner | 产物 | 说明 |
 | --- | --- | --- | --- |
-| Linux x86_64 | `ubuntu-22.04` | `devtools-<ver>-linux-x86_64.tar.gz`、`devtools_<ver>_amd64.deb` | X11 GPUI；需本机有 libxkbcommon / libxcb / fontconfig / vulkan 等运行时 |
-| macOS Apple Silicon | `macos-14` | `devtools-<ver>-macos-aarch64.zip`（内含 `Devtools.app`）、同名 **unsigned** `.dmg` | runner 自带 Xcode Metal SDK（工作流不下载 MetalToolchain）；未签名 / 未公证，Gatekeeper 会提示 |
+| Linux x86_64 | `ubuntu-22.04` | `devtools-<ver>-linux-x86_64.tar.gz`、`devtools_<ver>_amd64.deb` | X11 GPUI；deb 含 `devtools.desktop` + hicolor 图标；需本机有 libxkbcommon / libxcb / fontconfig / vulkan 等运行时 |
+| macOS Apple Silicon | `macos-14` | `devtools-<ver>-macos-aarch64.zip`（内含带 `AppIcon.icns` 的 `Devtools.app`）、同名 **unsigned** `.dmg` | runner 自带 Xcode Metal SDK（工作流不下载 MetalToolchain）；未签名 / 未公证，Gatekeeper 会提示；清除隔离见 README |
 | macOS Intel | — | （暂缓；`macos-13` runner 常排队不调度） | 后续补 |
 | Windows x86_64 | `windows-latest` | `devtools-<ver>-windows-x86_64.zip`（`devtools.exe`） | **experimental**；构建失败不阻断 Release。暂无 MSI |
 
 未做：**AppImage**（可用 tar.gz / deb）、**已签名 DMG / notarization**、**WiX MSI**。需要时再加 secrets 与打包步骤。
+
+## 应用图标
+
+图标源文件在 `assets/icon/`：
+
+| 文件 | 用途 |
+| --- | --- |
+| `devtools-master.jpg` | 设计原稿 |
+| `devtools-1024.png` | 规范 1024×1024（透明圆角外） |
+| `devtools.svg` | 可编辑矢量近似（打包以 PNG/ICNS 为准） |
+| `devtools-{16,32,64,128,256,512,1024}.png` | 常用尺寸；Linux `.deb` / tar 用 256 |
+| `AppIcon.iconset/` | macOS `iconutil` 输入 |
+| `AppIcon.icns` | 打进 `Devtools.app/Contents/Resources/` |
+
+`script/package-macos.sh` 写入 `CFBundleIconFile=AppIcon`。若缺少 `.icns` 且 runner 有 `iconutil`，会从 `.iconset` 现场生成。重做图标：改 `devtools-1024.png` 后跑 `bash script/build-app-icon.sh`。
 
 ## 本地等价命令
 

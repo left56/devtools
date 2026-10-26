@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Devtools">
+  <!-- Editable vector approximation of assets/icon/devtools-1024.png (packaging uses the raster). -->
+  <defs>
+    <linearGradient id="face" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e2430"/>
+      <stop offset="55%" stop-color="#171c26"/>
+      <stop offset="100%" stop-color="#10141c"/>
+    </linearGradient>
+  </defs>
+  <!-- Squircle fills canvas; corners transparent when rendered with alpha -->
+  <rect width="1024" height="1024" rx="230" ry="230" fill="url(#face)"/>
+  <g fill="none" stroke="#6b93e8" stroke-width="70" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer cradle: flared top, flat bottom (tool / bracket motif) -->
+    <path d="M300 355 L245 430 L245 605 L392 755 L632 755 L779 605 L779 430 L724 355"/>
+    <!-- Inner upward chevron -->
+    <path d="M392 575 L512 455 L632 575"/>
+  </g>
+</svg>
