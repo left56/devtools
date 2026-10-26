@@ -9,8 +9,7 @@
 # Artifact matrix (see docs/packaging.md):
 #   Linux x86_64   → .tar.gz + .deb
 #   macOS aarch64  → .app.zip + unsigned .dmg
-#   macOS x86_64   → .app.zip + unsigned .dmg
-#   Windows x86_64 → .zip (experimental; continue-on-error — GPUI Windows unverified)
+#   #   Windows x86_64 → .zip (experimental; continue-on-error — GPUI Windows unverified)
 name: Package
 
 on:
@@ -83,12 +82,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macos-13 (Intel) often stays queued indefinitely on GitHub; ship Apple Silicon first.
           - runner: macos-14
             arch: aarch64
             target: aarch64-apple-darwin
-          - runner: macos-13
-            arch: x86_64
-            target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
 

@@ -26,7 +26,7 @@ git push origin v0.1.0
 | --- | --- | --- | --- |
 | Linux x86_64 | `ubuntu-22.04` | `devtools-<ver>-linux-x86_64.tar.gz`、`devtools_<ver>_amd64.deb` | X11 GPUI；需本机有 libxkbcommon / libxcb / fontconfig / vulkan 等运行时 |
 | macOS Apple Silicon | `macos-14` | `devtools-<ver>-macos-aarch64.zip`（内含 `Devtools.app`）、同名 **unsigned** `.dmg` | runner 自带 Xcode Metal SDK（不下载 MetalToolchain）；未签名 / 未公证，Gatekeeper 会提示 |
-| macOS Intel | `macos-13` | `devtools-<ver>-macos-x86_64.zip` + unsigned `.dmg` | 同上 |
+| macOS Intel | — | （暂缓；`macos-13` runner 常排队不调度） | 后续补 |
 | Windows x86_64 | `windows-latest` | `devtools-<ver>-windows-x86_64.zip`（`devtools.exe`） | **experimental**；构建失败不阻断 Release。暂无 MSI |
 
 未做：**AppImage**（可用 tar.gz / deb）、**已签名 DMG / notarization**、**WiX MSI**。需要时再加 secrets 与打包步骤。
