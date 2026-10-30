@@ -932,9 +932,11 @@ mod tests {
 ",
         );
         let src = LogSource::open(&path).unwrap();
-        let mut q = LogQuery::default();
-        q.search = "disk".into();
-        q.levels = vec![LogLevel::Error];
+        let q = LogQuery {
+            search: "disk".into(),
+            levels: vec![LogLevel::Error],
+            ..Default::default()
+        };
         let result = scan(&[src], &q);
         assert_eq!(result.matched_total, 1);
         assert_eq!(result.rows.len(), 1);
@@ -970,9 +972,11 @@ mod tests {
 ",
         );
         let src = LogSource::open(&path).unwrap();
-        let mut q = LogQuery::default();
-        q.from = parse_filter_time("2024-06-01T10:00:00Z").unwrap();
-        q.to = parse_filter_time("2024-06-01T15:00:00Z").unwrap();
+        let q = LogQuery {
+            from: parse_filter_time("2024-06-01T10:00:00Z").unwrap(),
+            to: parse_filter_time("2024-06-01T15:00:00Z").unwrap(),
+            ..Default::default()
+        };
         let result = scan(&[src], &q);
         assert_eq!(result.matched_total, 1);
         assert!(result.rows[0].message.contains("mid"));
@@ -982,9 +986,11 @@ mod tests {
     fn regex_search() {
         let path = write_temp("re.log", "2024-06-01T12:00:00Z INFO abc-123 xyz\n");
         let src = LogSource::open(&path).unwrap();
-        let mut q = LogQuery::default();
-        q.search = r"abc-\d+".into();
-        q.use_regex = true;
+        let q = LogQuery {
+            search: r"abc-\d+".into(),
+            use_regex: true,
+            ..Default::default()
+        };
         let result = scan(&[src], &q);
         assert_eq!(result.matched_total, 1);
         assert!(!result.rows[0].highlight.is_empty());
@@ -1018,7 +1024,7 @@ mod tests {
     fn add_sources_dedup_and_cap_notice() {
         let path = write_temp("one.log", "INFO x\n");
         let mut sources = Vec::new();
-        let n1 = add_sources(&mut sources, &[path.clone()]);
+        let n1 = add_sources(&mut sources, std::slice::from_ref(&path));
         assert!(n1.is_empty());
         assert_eq!(sources.len(), 1);
         let n2 = add_sources(&mut sources, &[path]);
