@@ -7,6 +7,7 @@ mod json_run;
 mod batch_workbench;
 mod inspector_workbench;
 mod json_workbench;
+mod log_workbench;
 mod network_workbench;
 mod text_field;
 mod theme;

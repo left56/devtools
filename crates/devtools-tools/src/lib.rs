@@ -33,6 +33,7 @@ pub mod ipv6_ula;
 pub mod json;
 pub mod jwt;
 pub mod list_conv;
+pub mod log_viewer;
 pub mod lorem;
 pub mod mac_gen;
 pub mod markdown_html;
@@ -117,6 +118,7 @@ pub fn catalog() -> Vec<ToolMeta> {
         slugify::meta(),
         lorem::meta(),
         text_stats::meta(),
+        log_viewer::meta(),
         list_conv::meta(),
         email_norm::meta(),
         numeronym::meta(),
@@ -331,6 +333,12 @@ pub fn is_batch_generate_tool(id: &str) -> bool {
     matches!(id, ids_list::IPV6_ULA | ids_list::MAC_GEN | ids_list::RANDOM_PORT | ids_list::RSA_KEYGEN | ids_list::BIP39)
 }
 
+
+/// Dedicated log viewer workbench (multi-file stream scan).
+pub fn is_log_viewer_tool(id: &str) -> bool {
+    matches!(id, ids_list::LOG_VIEWER)
+}
+
 /// Tools that use the network workbench (`NetworkUse::Explicit`).
 pub fn is_network_tool(id: &str) -> bool {
     matches!(
@@ -356,7 +364,7 @@ mod tests {
     #[test]
     fn builtin_catalog_is_unique_and_ready() {
         let registry = Registry::new(catalog());
-        assert_eq!(registry.tools().len(), 83);
+        assert_eq!(registry.tools().len(), 84);
         for tool in registry.tools() {
             assert_eq!(tool.availability, Availability::Ready);
             assert!(registry.contains(tool.id));
@@ -389,6 +397,8 @@ mod tests {
         assert!(is_network_tool(ids::NETWORK_INFO));
         assert!(!is_network_tool(ids::SPEED_TEST));
         assert!(is_network_tool(ids::PAGE_FETCH));
+        assert!(is_log_viewer_tool(ids::LOG_VIEWER));
+        assert!(!is_batch_tool(ids::LOG_VIEWER));
         assert!(is_batch_tool(ids::MATH_EVAL));
         assert!(is_batch_generate_tool(ids::RSA_KEYGEN));
         assert!(is_batch_generate_tool(ids::RANDOM_PORT));

@@ -93,6 +93,7 @@ pub mod ids {
     pub const SVG_EDIT: &str = "svg-edit";
     pub const TAILWIND_COLORS: &str = "tailwind-colors";
     pub const PAGE_FETCH: &str = "page-fetch";
+    pub const LOG_VIEWER: &str = "log-viewer";
 }
 
 
