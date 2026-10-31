@@ -1,6 +1,6 @@
 # Devtools 研发计划
 
-状态：**v0.1.0 已发布**；M0–M5 已落盘；侧边栏注册约 80 个工具（含 bcrypt / AES / RSA / BIP39，界面为学习向文案）。计时器 UI、相机、PDF 等仍暂缓。当前验收主机是 **Linux x86_64 + X11**；macOS aarch64 / Windows 有 CI 安装包，真机点验与签名分发仍待完善。
+状态：**v0.2.0 已发布**（新增 Log Viewer）；M0–M5 已落盘；侧边栏注册约 80+ 个工具（含 bcrypt / AES / RSA / BIP39，界面为学习向文案）。计时器 UI、相机、PDF 等仍暂缓。当前验收主机是 **Linux x86_64 + X11**；macOS aarch64 / Windows 有 CI 安装包，真机点验与签名分发仍待完善。
 
 读者：接下来实现工具或改界面的人。先看「目标和非目标」与「决策」，加工具直接看「新增一个工具」。
 
@@ -39,7 +39,7 @@ Devtools 是一个本机桌面工具箱：
 
 当前版本要达成：
 
-- 可在 Linux x86_64（X11）上完整验收；CI 产出 Linux / macOS aarch64 / Windows 安装包（见 [packaging.md](packaging.md) 与 [v0.1.0](https://github.com/left56/devtools/releases/tag/v0.1.0)）。
+- 可在 Linux x86_64（X11）上完整验收；CI 产出 Linux / macOS aarch64 / Windows 安装包（见 [packaging.md](packaging.md) 与 [v0.2.0](https://github.com/left56/devtools/releases/tag/v0.2.0)）。
 - 侧边栏、分类、搜索、命令面板都能定位工具。
 - 「工具目录」中已实现项可以在窗口里完成一次完整操作：输入、出结果、复制、看到错误位置。
 - 纯文本变换和识别规则有表驱动测试。测试不启动 GPUI。
@@ -221,7 +221,7 @@ id 一旦发布给注册表就不要改。显示名可以改。完整名单以 `
 
 ### M6 分发（进行中）
 
-- CI 多平台 Package 与 `v0.1.0` Release 已通（Linux tar.gz/deb、macOS aarch64 zip/dmg、Windows zip）。
+- CI 多平台 Package 与 `v0.2.0` Release 已通（Linux tar.gz/deb、macOS aarch64 zip/dmg、Windows zip）；`v0.1.0` 为首发。
 - 签名和 notarization 取决于还没定的 Apple 账号。
 - macOS Intel（`macos-13`）矩阵已因排队问题暂缓。
 

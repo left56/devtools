@@ -10,19 +10,19 @@
 | --- | --- |
 | **Push** 到 `main` 或 `feat/m2-tools` | 跑 `CI`（测+clippy）与 `Package`（打安装包），产物在 Actions → Artifacts |
 | **Pull Request** | 同上；在 PR 的 Checks 里打开对应 run → Artifacts |
-| **打 tag** `v*`（例如 `v0.1.0`） | `Package` 额外创建 **GitHub Release**，附件为各平台包 + `SHA256SUMS.txt` |
+| **打 tag** `v*`（例如 `v0.2.0`） | `Package` 额外创建 **GitHub Release**，附件为各平台包 + `SHA256SUMS.txt` |
 | **Actions → Package → Run workflow** | 手动重打当前分支 |
 
 示例打 tag：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 版本号来自根 `Cargo.toml` 的 `workspace.package.version`（打包脚本读取）；tag 名建议与之对齐。
 
-已发布示例：[v0.1.0](https://github.com/left56/devtools/releases/tag/v0.1.0)。
+已发布示例：[v0.2.0](https://github.com/left56/devtools/releases/tag/v0.2.0)（此前 [v0.1.0](https://github.com/left56/devtools/releases/tag/v0.1.0)）。
 
 ## 产物矩阵
 
@@ -55,11 +55,11 @@ git push origin v0.1.0
 ```bash
 # Linux
 cargo build --release -p devtools
-VERSION=0.1.0 bash script/package-linux.sh
+VERSION=0.2.0 bash script/package-linux.sh
 
 # macOS（本机通常需先装 Metal：xcodebuild -downloadComponent MetalToolchain）
 cargo build --release -p devtools --target aarch64-apple-darwin
-VERSION=0.1.0 TARGET=aarch64-apple-darwin ARCH_LABEL=aarch64 bash script/package-macos.sh
+VERSION=0.2.0 TARGET=aarch64-apple-darwin ARCH_LABEL=aarch64 bash script/package-macos.sh
 
 # Windows (PowerShell)
 cargo build --release -p devtools

@@ -36,7 +36,7 @@
 
 ## 下载与安装
 
-预编译包见 **[v0.1.0 Release](https://github.com/left56/devtools/releases/tag/v0.1.0)**（含校验和）：
+预编译包见 **[v0.2.0 Release](https://github.com/left56/devtools/releases/tag/v0.2.0)**（含校验和）：
 
 | 平台 | 产物 |
 | --- | --- |
