@@ -94,6 +94,7 @@ pub fn tool_glyph(tool_id: &str) -> &'static str {
         ids::RULER => "↕",
         ids::SVG_EDIT => "◇",
         ids::TAILWIND_COLORS => "TW",
+        ids::LOG_VIEWER => "☰",
         _ => "·",
     }
 }

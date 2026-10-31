@@ -5,6 +5,7 @@ use crate::{
     inspector_workbench::InspectorWorkbench,
     network_workbench::NetworkWorkbench,
     json_workbench::JsonWorkbench,
+    log_workbench::LogWorkbench,
     prefs::{self, Prefs},
     text_field::{Edited, TextField},
     theme::Theme,
@@ -25,6 +26,7 @@ pub struct Workspace {
     inspector: Entity<InspectorWorkbench>,
     batch: Entity<BatchWorkbench>,
     network: Entity<NetworkWorkbench>,
+    log_viewer: Entity<LogWorkbench>,
     palette_search: Entity<TextField>,
     palette_open: bool,
     palette_index: usize,
@@ -60,6 +62,7 @@ impl Workspace {
             inspector: cx.new(InspectorWorkbench::new),
             batch: cx.new(BatchWorkbench::new),
             network: cx.new(NetworkWorkbench::new),
+            log_viewer: cx.new(LogWorkbench::new),
             palette_search,
             palette_open: false,
             palette_index: 0,
@@ -74,6 +77,10 @@ impl Workspace {
     pub fn focus_editor(&self, window: &mut Window, cx: &App) {
         if self.selected == devtools_core::ids::JSON {
             self.workbench.read(cx).focus_input(window, cx);
+        } else if self.selected == devtools_core::ids::LOG_VIEWER
+            || devtools_tools::is_log_viewer_tool(self.selected)
+        {
+            self.log_viewer.read(cx).focus_input(window, cx);
         } else if devtools_tools::is_inspector_tool(self.selected) {
             self.inspector.read(cx).focus_input(window, cx);
         } else if devtools_tools::is_batch_tool(self.selected) {
@@ -154,6 +161,11 @@ impl Workspace {
         self.chrome_notice = "";
         if id == devtools_core::ids::JSON {
             self.focus_editor(window, cx);
+        } else if id == devtools_core::ids::LOG_VIEWER
+            || devtools_tools::is_log_viewer_tool(id)
+        {
+            self.log_viewer
+                .update(cx, |bench, cx| bench.set_tool(id, window, cx));
         } else if devtools_tools::is_inspector_tool(id) {
             self.inspector
                 .update(cx, |bench, cx| bench.set_tool(id, window, cx));
@@ -238,6 +250,11 @@ impl Workspace {
     fn insert_text_into_current(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected == devtools_core::ids::JSON {
             self.workbench
+                .update(cx, |bench, cx| bench.set_input_text(text, window, cx));
+        } else if self.selected == devtools_core::ids::LOG_VIEWER
+            || devtools_tools::is_log_viewer_tool(self.selected)
+        {
+            self.log_viewer
                 .update(cx, |bench, cx| bench.set_input_text(text, window, cx));
         } else if devtools_tools::is_inspector_tool(self.selected) {
             self.inspector
@@ -783,6 +800,11 @@ impl Render for Workspace {
                             .when(self.selected == devtools_core::ids::JSON, |view| {
                                 view.child(self.workbench.clone())
                             })
+                            .when(
+                                self.selected == devtools_core::ids::LOG_VIEWER
+                                    || devtools_tools::is_log_viewer_tool(self.selected),
+                                |view| view.child(self.log_viewer.clone()),
+                            )
                             .when(devtools_tools::is_inspector_tool(self.selected), |view| {
                                 view.child(self.inspector.clone())
                             })
@@ -794,6 +816,8 @@ impl Render for Workspace {
                             })
                             .when(
                                 self.selected != devtools_core::ids::JSON
+                                    && self.selected != devtools_core::ids::LOG_VIEWER
+                                    && !devtools_tools::is_log_viewer_tool(self.selected)
                                     && !devtools_tools::is_inspector_tool(self.selected)
                                     && !devtools_tools::is_batch_tool(self.selected)
                                     && !devtools_tools::is_network_tool(self.selected),
