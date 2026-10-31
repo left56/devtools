@@ -5,8 +5,8 @@ use crate::{
     theme::Theme,
     tree_state::TreeState,
     ui::{
-        button, chip, pane, pane_header, pane_title, paste_button, status_chip, workbench_title,
-        StatusKind,
+        button, chip, pane, pane_header, pane_title, paste_button, single_line, status_chip,
+        workbench_title, StatusKind,
     },
 };
 use devtools_tools::json::{FormatOptions, IndentStyle, JsonDocument, JsonKind};
@@ -314,13 +314,15 @@ impl JsonWorkbench {
                 };
                 div()
                     .id(SharedString::from(format!("node-{id}")))
-                    .h(px(30.))
+                    .min_h(px(30.))
                     .flex_shrink_0()
                     .w_full()
+                    .min_w_0()
                     .pl(px(8. + depth as f32 * 18.))
                     .pr_2()
+                    .py(px(4.))
                     .flex()
-                    .items_center()
+                    .items_start()
                     .gap_2()
                     .rounded_sm()
                     .cursor_pointer()
@@ -344,7 +346,10 @@ impl JsonWorkbench {
                         div()
                             .id(SharedString::from(format!("toggle-{id}")))
                             .w(px(16.))
+                            .h(px(22.))
                             .flex_shrink_0()
+                            .flex()
+                            .items_center()
                             .text_color(theme.muted)
                             .child(if has_children {
                                 if self.tree.expanded(id) { "▾" } else { "▸" }
@@ -368,16 +373,18 @@ impl JsonWorkbench {
                     .child(
                         div()
                             .flex_shrink_0()
-                            .max_w(relative(0.5))
-                            .truncate()
-                            .child(node.label.clone()),
+                            .max_w(relative(0.45))
+                            .min_w_0()
+                            .whitespace_normal()
+                            .child(single_line(node.label.as_str())),
                     )
                     .child(
                         div()
+                            .flex_1()
                             .min_w_0()
-                            .truncate()
+                            .whitespace_normal()
                             .text_color(color)
-                            .child(node.preview.clone()),
+                            .child(single_line(node.preview.as_str())),
                     )
             })
             .collect();
