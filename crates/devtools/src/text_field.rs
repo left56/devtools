@@ -1,4 +1,5 @@
-//! A small, unwrapped multi-line editor. Each logical line is shaped separately.
+//! Multi-line editor. Editable lines are shaped unwrapped (horizontal scroll);
+//! read-only multiline output soft-wraps via layout (`whitespace_normal`).
 use crate::{actions::*, buffer::Buffer, theme::Theme};
 use gpui::*;
 use std::ops::Range;
@@ -186,11 +187,15 @@ impl TextField {
     }
     fn copy_selection(&self, cx: &mut Context<Self>) {
         let range = self.buffer.selection();
-        if !range.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(
-                self.buffer.text()[range].to_owned(),
-            ));
-        }
+        let text = if !range.is_empty() {
+            self.buffer.text()[range].to_owned()
+        } else if self.read_only && self.multiline && !self.buffer.text().is_empty() {
+            // Wrapped read-only view has no painted selection hit-targets; copy all.
+            self.buffer.text().to_owned()
+        } else {
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
     fn mouse_index(&self, position: Point<Pixels>) -> usize {
         let Some(line) = self
@@ -545,31 +550,88 @@ impl Element for TextLine {
 impl Render for TextField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
-        let mut start = 0;
-        let lines: Vec<_> = self
-            .buffer
-            .text()
-            .split('\n')
-            .enumerate()
-            .map(|(row, text)| {
-                let placeholder = self.buffer.text().is_empty();
-                let line = TextLine {
-                    field: cx.entity(),
-                    row,
-                    start,
-                    text: if placeholder {
-                        self.placeholder.clone()
-                    } else {
-                        // Defend against \r left in a "line" after a naive split.
-                        flatten_text_run(text)
-                    },
-                    placeholder,
-                };
-                start += text.len() + 1;
-                line
-            })
-            .collect();
-        self.layouts.truncate(lines.len());
+        // Read-only multiline (JSON format result, etc.): soft-wrap with layout
+        // instead of a shaped unwrapped line that forces horizontal overflow.
+        // Still one SharedString per logical line — never embed `\n` in a text run.
+        let wrap_output = self.read_only && self.multiline;
+        let body = if wrap_output {
+            self.layouts.clear();
+            let empty = self.buffer.text().is_empty();
+            let rows: Vec<AnyElement> = if empty {
+                vec![
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .whitespace_normal()
+                        .text_color(theme.muted)
+                        .child(self.placeholder.clone())
+                        .into_any_element(),
+                ]
+            } else {
+                self.buffer
+                    .text()
+                    .split('\n')
+                    .map(|text| {
+                        let display = if text.is_empty() {
+                            SharedString::from(" ")
+                        } else {
+                            flatten_text_run(text)
+                        };
+                        div()
+                            .w_full()
+                            .min_w_0()
+                            .whitespace_normal()
+                            .child(display)
+                            .into_any_element()
+                    })
+                    .collect()
+            };
+            div()
+                .id("text-scroll")
+                .size_full()
+                .min_w_0()
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll)
+                .flex()
+                .flex_col()
+                .children(rows)
+                .into_any_element()
+        } else {
+            let mut start = 0;
+            let lines: Vec<_> = self
+                .buffer
+                .text()
+                .split('\n')
+                .enumerate()
+                .map(|(row, text)| {
+                    let placeholder = self.buffer.text().is_empty();
+                    let line = TextLine {
+                        field: cx.entity(),
+                        row,
+                        start,
+                        text: if placeholder {
+                            self.placeholder.clone()
+                        } else {
+                            // Defend against \r left in a "line" after a naive split.
+                            flatten_text_run(text)
+                        },
+                        placeholder,
+                    };
+                    start += text.len() + 1;
+                    line
+                })
+                .collect();
+            self.layouts.truncate(lines.len());
+            div()
+                .id("text-scroll")
+                .size_full()
+                .overflow_scroll()
+                .track_scroll(&self.scroll)
+                .flex()
+                .flex_col()
+                .children(lines)
+                .into_any_element()
+        };
         div()
             .key_context(if self.multiline {
                 "Editor"
@@ -634,15 +696,6 @@ impl Render for TextField {
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::mouse_up))
-            .child(
-                div()
-                    .id("text-scroll")
-                    .size_full()
-                    .overflow_scroll()
-                    .track_scroll(&self.scroll)
-                    .flex()
-                    .flex_col()
-                    .children(lines),
-            )
+            .child(body)
     }
 }

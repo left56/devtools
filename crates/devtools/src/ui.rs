@@ -150,7 +150,15 @@ pub fn multiline_mono(theme: Theme, text: impl AsRef<str>) -> Div {
             // lines() already strips separators; still flatten defensively.
             single_line(line)
         };
-        col = col.child(div().min_w_0().child(display));
+        // Layout wrap (WhiteSpace::Normal): never put \n into a Label — one flat
+        // run per logical line; GPUI soft-wraps when the pane is narrow.
+        col = col.child(
+            div()
+                .w_full()
+                .min_w_0()
+                .whitespace_normal()
+                .child(display),
+        );
     }
     if total > MAX_LINES {
         col = col.child(
